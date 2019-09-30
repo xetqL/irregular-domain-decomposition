@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.13)
 project(adlbirreg)
 
 set(CMAKE_CXX_STANDARD 14)
@@ -7,3 +7,4 @@ find_package(CGAL REQUIRED)
 include(${CGAL_USE_FILE})
 add_executable(adlbirreg main.cpp)
 target_link_libraries(adlbirreg ${CGAL_LIBS})
+
