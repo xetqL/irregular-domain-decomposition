@@ -17,7 +17,8 @@ using Transformation = CGAL::Aff_transformation_3<Kernel>;
 
 struct Partition {
     Point_3 v1,v2,v3,v4,v5,v6,v7,v8; //vertex of spatial partition, v1 is upper right
-    Tetrahedron_3 t1,t2,t3,t4,t5,t6;
+
+    Tetrahedron_3 t1, t2, t3, t4, t5, t6;
 
     Partition(const Point_3& v1, const Point_3& v2, const Point_3& v3, const Point_3& v4,
               const Point_3& v5, const Point_3& v6, const Point_3& v7, const Point_3& v8)
@@ -32,6 +33,13 @@ struct Partition {
         t4 = Tetrahedron_3(v1, v3, v7, v8);
         t5 = Tetrahedron_3(v1, v5, v6, v8);
         t6 = Tetrahedron_3(v1, v5, v7, v8);
+
+        auto volume = t1.volume() + t2.volume() + t3.volume() + t4.volume() + t5.volume() + t6.volume();
+        std::cout << t1.volume() << std::endl;
+        auto ref_volume = v8.x()*v8.y()*v8.z();
+        if(volume != ref_volume) {
+            std::cout << "ref volume: " << ref_volume << " effective volume: " << volume << std::endl;
+        }
     };
 
     friend std::ostream &operator<<(std::ostream &os, const Partition &partition) {
