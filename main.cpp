@@ -56,12 +56,16 @@ inline Point_3 operator+(const Point_3& p1, const Point_3& p2){
 }
 
 Point_3 get_center_of_load(const std::vector<double>& weights, const std::vector<Point_3>& elements) {
+
     const double total_weight = std::accumulate(weights.cbegin(), weights.cend(), 0.0);
     const auto size = elements.size();
 
     Point_3 r(0, 0, 0);
 
-    for(int i = 0; i < size; ++i) r = r + (weights[i] * elements[i]);
+    for(int i = 0; i < size; ++i) {
+        //std::cout << (weights[i] * elements[i]) << std::endl;
+        r = r + (weights[i] * elements[i]);
+    }
 
     return (1.0/total_weight) * r;
 }
@@ -81,9 +85,11 @@ inline void compute_average_load(const double my_load, double* average_load, MPI
 
 inline std::vector<double> get_neighbors_load(double my_load, MPI_Comm neighborhood){
     int N;
-    MPI_Comm_size(neighborhood, &N);
+    MPI_Comm_size(MPI_COMM_WORLD, &N);
     std::vector<double> all_loads(N);
-    MPI_Alltoall(&my_load, 1, MPI_DOUBLE, all_loads.data(), 1, MPI_DOUBLE, neighborhood);
+    //std::cout << "> "<< my_load << std::endl;
+    MPI_Allgather(&my_load, 1, MPI_DOUBLE, all_loads.data(), 1, MPI_DOUBLE, MPI_COMM_WORLD);
+    //std::for_each(all_loads.cbegin(), all_loads.cend(), [](auto v){ std::cout << "!!"<<v << std::endl; });
     return all_loads;
 }
 
@@ -100,44 +106,20 @@ std::vector<Point_3> get_centers_of_load_for_vertex(const Point_3& cl, MPI_Comm 
     return centers_of_load;
 }
 
-std::array<std::vector<Point_3>, 8> spread_centers_of_load(const Point_3& cl, const std::array<MPI_Comm, 8>& neighborhood) {
-    int N;
-    std::array<std::vector<Point_3>, 8> all_cl;
-    std::array<std::vector<double>, 8> buff_all_cl;
-    std::array<MPI_Request, 8> requests;
-
-    std::array<double, 3> my_cl = {cl.x(), cl.y(), cl.z()};
-    for(int i = 0; i < 8; ++i){
-        MPI_Comm_size(neighborhood[0], &N);
-        buff_all_cl[i].resize(3*N);
-        all_cl[i].resize(N);
-        MPI_Ialltoall(my_cl.data(), 3, MPI_DOUBLE, buff_all_cl[i].data(), 3, MPI_DOUBLE, neighborhood[i], &requests[i]);
-    }
-
-    MPI_Waitall(8, requests.data(), MPI_STATUSES_IGNORE);
-
-    for(int i = 0; i < 8; ++i) {
-        auto N = all_cl[i].size();
-        for(int j = 0; j < N; ++j) {
-            all_cl[i][j] = Point_3(buff_all_cl[i][j*3],buff_all_cl[i][j*3+1],buff_all_cl[i][j*3+2]);
-        }
-    }
-
-    return all_cl;
-}
-
 double compute_normalized_load(double my_load, double unit) {
     return my_load / unit;
 }
 
-inline Vector_3 get_direction(const Point_3& vertex, const Point_3& center_of_load){
+inline Vector_3 get_direction(const Point_3& vertex, const Point_3& center_of_load) {
     return (vertex - center_of_load)/std::sqrt(CGAL::squared_distance(vertex, center_of_load));
 }
 
 Vector_3 get_vertex_force(const Point_3& vertex, const std::vector<Point_3>& centers_of_load, const std::vector<double>& normalized_loads) {
     Vector_3 f(0,0,0);
     const auto size = centers_of_load.size();
-    for(int i = 0; i < size; ++i) f += (normalized_loads[i] - 1) * get_direction(vertex, centers_of_load[i]);
+    for(int i = 0; i < size; ++i) {
+        f += (normalized_loads[i] - 1) * get_direction(vertex, centers_of_load[i]);
+    }
     return f;
 }
 
@@ -196,7 +178,7 @@ struct Domain {
 
     std::vector<Partition> partitions;
 
-    Partition get_my_partition(int rank);
+    Partition& get_my_partition(int rank);
 
     explicit Domain (std::vector<Partition>& partitions): partitions(partitions) {}
 /*
@@ -270,8 +252,9 @@ struct Domain {
     void bootstrap_partitions_cubical(unsigned int nb_partitions, const Point_3& p1,const Point_3& p2,const Point_3& p3,const Point_3& p4,
                                       const Point_3& p5,const Point_3& p6,const Point_3& p7,const Point_3& p8){
         const double proc_per_row = std::cbrt(nb_partitions);
-        const int row_size = (int) proc_per_row;
-        const double p_m1 = ((proc_per_row - 1) / proc_per_row);
+        const int    row_size     = (int) proc_per_row;
+        const double p_m1         = ((proc_per_row - 1) / proc_per_row);
+
 
         Transformation translate_right(  CGAL::TRANSLATION, Vector_3(std::abs(p1.x() - p2.x()) / proc_per_row, 0, 0));
         Transformation translate_fullleft(  CGAL::TRANSLATION, Vector_3(std::abs(p1.x() - p2.x()) *  p_m1, 0, 0));
@@ -326,6 +309,7 @@ struct Domain {
     void print_partitions() {
         std::for_each(partitions.cbegin(), partitions.cend(), [](auto p){std::cout << p << std::endl;});
     }
+
 };
 
 Vector_3 constraint_force(const Domain* d, const Point_3& p, const Vector_3& f);
@@ -378,23 +362,51 @@ struct Partition {
         return vertex + mu*force;
     }
 
+    std::array<std::vector<Point_3>, 8> spread_centers_of_load(const Point_3& cl, const std::array<MPI_Comm, 8>& neighborhood) {
+        int N;
+        std::array<std::vector<Point_3>, 8> all_cl;
+        std::array<std::vector<double>, 8> buff_all_cl;
+        std::array<MPI_Request, 8> requests;
+        std::array<double, 3> my_cl = {cl.x(), cl.y(), cl.z()};
+        for(int i = 0; i < 8; ++i) {
+            MPI_Comm_size(neighborhood[i], &N);
+            buff_all_cl[i].resize(3*N);
+            all_cl[i].resize(N);
+            MPI_Iallgather(my_cl.data(), 3, MPI_DOUBLE, buff_all_cl[i].data(), 3, MPI_DOUBLE, neighborhood[i], &requests[i]);
+        }
+
+        MPI_Waitall(8, requests.data(), MPI_STATUSES_IGNORE);
+
+        for(int i = 0; i < 8; ++i) {
+            auto N = all_cl[i].size();
+            for(int j = 0; j < N; ++j) {
+                all_cl[i][j] = Point_3(buff_all_cl[i][j*3],buff_all_cl[i][j*3+1],buff_all_cl[i][j*3+2]);
+            }
+        }
+
+        return all_cl;
+    }
+
     template<class CartesianPointTransformer, class LoadComputer, class A>
-    void move_vertices(const std::vector<double>& weights, const std::vector<A>& elements, MPI_Comm neighborhood = MPI_COMM_WORLD) {
+    void move_vertices(const std::vector<A>& elements, MPI_Comm neighborhood = MPI_COMM_WORLD) {
         LoadComputer lc;
         CartesianPointTransformer transformer;
-        std::vector<Point_3> points(elements.size());
+        std::vector<Point_3> points;
 
         double my_load = lc.compute_load(elements);
+        const std::vector<double>& weights = lc.get_weights(elements);
 
         std::transform(elements.cbegin(), elements.cend(), std::back_inserter(points), [&transformer](auto el){return transformer.transform(el);});
 
         int N; MPI_Comm_size(neighborhood, &N);
 
         auto all_loads = get_neighbors_load(my_load, neighborhood); //global load balancing with MPI_COMM_WORLD
-
         auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / N;
 
-        decltype(all_loads) normalized_loads(N);
+        //std::for_each(all_loads.cbegin(), all_loads.cend(), [](auto v){ std::cout << v << std::endl; });
+
+        decltype(all_loads) normalized_loads;
+        std::transform(all_loads.cbegin(), all_loads.cend(), std::back_inserter(normalized_loads), [&avg_load](auto n){return n/avg_load;});
 
         auto max_normalized_load = *std::max_element(normalized_loads.cbegin(), normalized_loads.cend());
 
@@ -403,23 +415,24 @@ struct Partition {
         std::transform(all_loads.cbegin(), all_loads.cend(), std::back_inserter(normalized_loads), [&avg_load](auto v){return v / avg_load;});
 
         auto center_of_load = get_center_of_load(weights, points);
+
         auto all_cl = spread_centers_of_load(center_of_load, vertex_neighborhood);
 
         for(int i = 0; i < 8; ++i) {
             auto& v = vertices[i];
             auto cls = all_cl[i];
             auto f1 = get_vertex_force(v, cls, normalized_loads);
-            f1 = constraint_force(d, v, f1);
-            v = move_vertex(v, f1, mu);
+            auto f1_after = constraint_force(d, v, f1);
+            //std::cout << f1 << " " << f1_after << " " << v << std::endl;
+
+            v = move_vertex(v, f1_after, mu);
         }
     }
 
     template<class NumericalType>
-    NumericalType get_vertex_id(const Point_3& v) {
-        int N;
-        MPI_Comm_size(MPI_COMM_WORLD, &N);
-        auto proc_per_row = (NumericalType) std::cbrt(N);
-        const double step = this->d->xsize();
+    NumericalType get_vertex_id(const Point_3& v, int N) {
+        auto proc_per_row = (NumericalType) std::cbrt(N) + 1;
+        const double step = this->d->xsize() / proc_per_row;
         return position_to_cell<NumericalType>(v, step, proc_per_row, proc_per_row);
     }
 
@@ -427,14 +440,13 @@ struct Partition {
         int N, rank;
         MPI_Comm_size(MPI_COMM_WORLD, &N);
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-        for(int i = 0; i < 8; ++i) {
-            MPI_Comm_split(MPI_COMM_WORLD, get_vertex_id<int>(vertices[i]), rank, &vertex_neighborhood[i]);
-        }
+        for(int i = 0; i < 8; ++i)
+            MPI_Comm_split(MPI_COMM_WORLD, get_vertex_id<int>(vertices[i], N), rank, &vertex_neighborhood[i]);
     }
 
 };
 
-Partition Domain::get_my_partition(int rank){
+Partition& Domain::get_my_partition(int rank) {
     return partitions.at(rank);
 }
 
@@ -472,7 +484,7 @@ Vector_3 constraint_force(const Domain* d, const Point_3& p, const Vector_3& f){
 }
 double compute_mu(const Domain* d, double max_normalized_load){
     double sigma_max = max_normalized_load-1;
-    return sigma_max == 0 ? 0 : d->get_grid_cell_size()/(max_normalized_load-1);
+    return sigma_max == 0 ? 0 : d->get_grid_cell_size()/(sigma_max);
 }
 
 template<class A>
@@ -512,7 +524,7 @@ struct Cell {
 
     std::tuple<int, int, int> get_position_as_pair() const {
         int x,y,z;
-        linear_to_grid(gid, Cell::get_msx(), Cell::get_msy(), x,y,z); //cell_to_global_position(Cell::get_msx(), Cell::get_msy(), gid);
+        linear_to_grid(gid, Cell::get_msx(), Cell::get_msy(), x, y, z); //cell_to_global_position(Cell::get_msx(), Cell::get_msy(), gid);
         return std::make_tuple(x,y,z);
     }
 
@@ -575,6 +587,26 @@ struct Cell {
         return os;
     }
 };
+struct GridElementComputer {
+    double compute_load(const std::vector<Cell>& elements){
+        return std::accumulate(elements.cbegin(), elements.cend(), 0.0, [](double l, Cell e){return l + e.weight;});
+    }
+    std::vector<double> get_weights(const std::vector<Cell>& elements) {
+        std::vector<double> weights;
+        std::transform(elements.cbegin(), elements.cend(), std::back_inserter(weights), [](Cell e) {
+            return e.weight;
+        });
+        return weights;
+    }
+};
+
+struct GridPointTransformer {
+    Point_3 transform(const Cell& element){
+        double x,y,z;
+        std::tie(x,y,z) = element.get_position_as_pair();
+        return Point_3(x,y,z);
+    }
+};
 
 std::vector<Cell> generate_lattice_single_type( int msx, int msy,
                                                 int x_proc_idx, int y_proc_idx,
@@ -592,19 +624,7 @@ std::vector<Cell> generate_lattice_single_type( int msx, int msy,
     return my_cells;
 }
 
-struct GridElementComputer {
-    double compute_load(const std::vector<Cell>& elements){
-        return elements.size();
-    }
-};
 
-struct GridPointTransformer {
-    Point_3 transform(const Cell& element){
-        double x,y,z;
-        std::tie(x,y,z) = element.get_position_as_pair();
-        return Point_3(x,y,z);
-    }
-};
 
 int main() {
     MPI_Init(nullptr, nullptr);
@@ -616,13 +636,17 @@ int main() {
 
     int col_row = (int) std::cbrt(wsize);
 
-    Domain d(10, 10, 10);
+    Domain d(10, 10, 0);
 
-    d.grid_cell_size = 2.5;
+    d.grid_cell_size = 1;
+
+    Cell::get_msy() = 10;
+    Cell::get_msx() = 10;
 
     d.bootstrap_partitions(wsize);
 
     auto part = d.get_my_partition(rank);
+    part.init_communicators();
 
     std::random_device rd{};
     std::mt19937 gen{rd()};
@@ -634,11 +658,10 @@ int main() {
     int cell_in_my_cols = (int) (bbox.ymax() - bbox.ymin()) / d.grid_cell_size;
 
     auto cell_per_process = cell_in_my_cols * cell_in_my_rows;
+
     std::vector<Cell> my_cells; my_cells.reserve(cell_per_process);
 
     int x_proc_idx, y_proc_idx, z_proc_idx; linear_to_grid(rank, col_row, col_row, x_proc_idx, y_proc_idx, z_proc_idx);
-
-    std::cout << rank << " " << x_proc_idx << " " << y_proc_idx << " " << z_proc_idx << " " << cell_in_my_rows << " " << cell_in_my_cols<<  std::endl;
 
     const int xcells = cell_in_my_rows * col_row, ycells = cell_in_my_rows * col_row, zcells = cell_in_my_rows * col_row;
 
@@ -650,12 +673,11 @@ int main() {
             }
         }
     }
-    using namespace std::chrono_literals;
-    MPI_Barrier(MPI_COMM_WORLD);
-    for(int i = 0; i < wsize; ++i) {
-        if(rank == i) std::for_each(my_cells.cbegin(), my_cells.cend(), [&rank](auto v){ std::cout << rank << " "<< v << std::endl; });
-        std::this_thread::sleep_for(0.5s);
-    }
+
+    part.move_vertices<GridPointTransformer, GridElementComputer, Cell>(my_cells);
+
+    if(!rank) d.print_partitions();
+
     MPI_Finalize();
 
     return 0;
