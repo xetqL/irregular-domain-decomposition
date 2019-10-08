@@ -9,6 +9,8 @@
 #include <iostream>
 #include <chrono>
 #include <thread>
+int rank;
+
 inline int bitselect(int condition, int truereturnvalue, int falsereturnvalue) {
     return (truereturnvalue & -condition) | (falsereturnvalue & ~(-condition)); //a when TRUE and b when FintLSE
 }
@@ -257,13 +259,13 @@ struct Domain {
 
 
         Transformation translate_right(  CGAL::TRANSLATION, Vector_3(std::abs(p1.x() - p2.x()) / proc_per_row, 0, 0));
-        Transformation translate_fullleft(  CGAL::TRANSLATION, Vector_3(std::abs(p1.x() - p2.x()) *  p_m1, 0, 0));
+        Transformation translate_fullleft(  CGAL::TRANSLATION, Vector_3(-row_size * std::abs(p1.x() - p2.x()) / proc_per_row, 0, 0));
 
         Transformation translate_up(     CGAL::TRANSLATION, Vector_3(0, std::abs(p1.y() - p5.y()) / proc_per_row, 0));
-        Transformation translate_fulldown(     CGAL::TRANSLATION, Vector_3(0, std::abs(p1.y() - p5.y()) * p_m1, 0));
+        Transformation translate_fulldown(     CGAL::TRANSLATION, Vector_3(0, -row_size * std::abs(p1.y() - p5.y()) * p_m1, 0));
 
         Transformation translate_forward(CGAL::TRANSLATION, Vector_3(0, 0, std::abs(p1.z() - p3.z()) / proc_per_row));
-        Transformation translate_fullbackward(CGAL::TRANSLATION, Vector_3(0, 0, std::abs(p1.z() - p3.z()) * p_m1));
+        Transformation translate_fullbackward(CGAL::TRANSLATION, Vector_3(0, 0, -row_size * std::abs(p1.z() - p3.z()) * p_m1));
 
         std::array<Point_3, 8> partition_vertices =
                 {p1,
@@ -274,6 +276,7 @@ struct Domain {
                  translate_up(translate_right(p1)),
                  translate_forward(translate_up(p1)),
                  translate_forward(translate_up(translate_right(p1)))};
+
         int id = 0;
         for(int i = 0; i < row_size; ++i) {
             for(int j = 0; j < row_size; ++j) {
@@ -338,10 +341,10 @@ struct Partition {
         tetrahedra[5] = Tetrahedron_3(vertices[0], vertices[4], vertices[6], vertices[7]);
 
         //Union of tetrahedra must be equal to Partition, hence sum of volumes = volume of partition
-        auto volume = std::abs(tetrahedra[0].volume()) + std::abs(tetrahedra[1].volume()) +
+        /*auto volume = std::abs(tetrahedra[0].volume()) + std::abs(tetrahedra[1].volume()) +
                       std::abs(tetrahedra[2].volume()) + std::abs(tetrahedra[3].volume()) +
                       std::abs(tetrahedra[4].volume()) + std::abs(tetrahedra[5].volume());
-        assert(volume - this->get_volume() <= std::numeric_limits<double>::epsilon());
+        assert(volume - this->get_volume() <= std::numeric_limits<double>::epsilon());*/
     }
 
     friend std::ostream &operator<<(std::ostream &os, const Partition &partition) {
@@ -366,7 +369,9 @@ struct Partition {
         int N;
         std::array<std::vector<Point_3>, 8> all_cl;
         std::array<std::vector<double>, 8> buff_all_cl;
+
         std::array<MPI_Request, 8> requests;
+
         std::array<double, 3> my_cl = {cl.x(), cl.y(), cl.z()};
         for(int i = 0; i < 8; ++i) {
             MPI_Comm_size(neighborhood[i], &N);
@@ -420,13 +425,22 @@ struct Partition {
 
         for(int i = 0; i < 8; ++i) {
             auto& v = vertices[i];
+
             auto cls = all_cl[i];
+
+            std::ostringstream vts;
+
+            std::copy(cls.begin(), cls.end(),
+                      std::ostream_iterator<Point_3>(vts, ", "));
+
+            std::cout <<  get_vertex_id<int>(v, 8) << " | " << rank << std::endl;
+
             auto f1 = get_vertex_force(v, cls, normalized_loads);
             auto f1_after = constraint_force(d, v, f1);
-            //std::cout << f1 << " " << f1_after << " " << v << std::endl;
-
-            v = move_vertex(v, f1_after, mu);
+            auto v_after = move_vertex(v, f1_after, mu);
+            //v = v_after;
         }
+        construct_tetrahedra();
     }
 
     template<class NumericalType>
@@ -437,11 +451,18 @@ struct Partition {
     }
 
     void init_communicators() {
-        int N, rank;
+        int N, x;
         MPI_Comm_size(MPI_COMM_WORLD, &N);
-        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-        for(int i = 0; i < 8; ++i)
-            MPI_Comm_split(MPI_COMM_WORLD, get_vertex_id<int>(vertices[i], N), rank, &vertex_neighborhood[i]);
+        std::vector<int> vertices_id(8);
+
+        for(int i = 0; i < 8; ++i)  vertices_id[i] = get_vertex_id<int>(vertices[i], N);
+        std::sort(vertices.begin(), vertices.end());
+
+        for(int i = 0; i < 8; ++i) {
+            MPI_Comm_split(MPI_COMM_WORLD, vertices_id[i], rank, &vertex_neighborhood[i]);
+            MPI_Comm_size(vertex_neighborhood[i], &x);
+            std::cout << x << std::endl;
+        }
     }
 
 };
@@ -629,14 +650,14 @@ std::vector<Cell> generate_lattice_single_type( int msx, int msy,
 int main() {
     MPI_Init(nullptr, nullptr);
 
-    int wsize, rank;
+    int wsize;
 
     MPI_Comm_size(MPI_COMM_WORLD, &wsize);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
     int col_row = (int) std::cbrt(wsize);
 
-    Domain d(10, 10, 0);
+    Domain d(10, 10, 10);
 
     d.grid_cell_size = 1;
 
@@ -676,7 +697,7 @@ int main() {
 
     part.move_vertices<GridPointTransformer, GridElementComputer, Cell>(my_cells);
 
-    if(!rank) d.print_partitions();
+    std::cout << part << std::endl;
 
     MPI_Finalize();
 
