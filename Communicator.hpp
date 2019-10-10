@@ -13,8 +13,10 @@
 class Communicator {
     std::vector<int> comm_to_world;
     std::map<int, int> world_to_comm;
+
 public:
     int world_rank, comm_size;
+
     Communicator(): comm_to_world({}){}
     Communicator(std::vector<int> neighbors) : comm_to_world(std::move(neighbors)) {
         std::sort(comm_to_world.begin(), comm_to_world.end());
@@ -53,7 +55,8 @@ public:
                     int virtual_dest   = virtual_rank ^ ((int) std::pow(2, i));
                     MPI_Send(buffer, count, type, comm_to_world.at(virtual_dest ^ world_to_comm.at(root)), 0, MPI_COMM_WORLD);
                 } else {
-                    MPI_Recv(buffer, count, type, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    int virtual_src   = virtual_rank ^ ((int) std::pow(2, i));
+                    MPI_Recv(buffer, count, type, comm_to_world.at( virtual_src ^ world_to_comm.at(root)), 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 }
             }
         }
@@ -111,8 +114,9 @@ public:
                 i++;
             }
     }
-};
 
+    std::vector<int> get_ranks() { return comm_to_world; }
+};
 
 
 #endif //ADLBIRREG_COMMUNICATOR_HPP

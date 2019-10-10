@@ -467,7 +467,14 @@ struct Partition {
 
             auto f1_after = constraint_force(d, v, f1);
 
+            if(vertices_id[i] == 4){
+                auto ranks = vertex_neighborhood[4].get_ranks();
+                std::ostringstream vts;
+                std::copy(cls.begin(), cls.end(),
+                          std::ostream_iterator<Point_3>(vts, "; "));
+                std::cout << f1 << " ;" << vts.str()  << std::endl;
 
+            }
             v = move_vertex(v, f1_after, mu);
 
         }
@@ -741,7 +748,6 @@ int main() {
     part.move_vertices<GridPointTransformer, GridElementComputer, Cell>(my_cells);
 
     std::cout << part << std::endl;
-
 
     MPI_Finalize();
 
