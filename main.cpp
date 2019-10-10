@@ -9,7 +9,10 @@
 #include <iostream>
 #include <chrono>
 #include <thread>
-int rank;
+#include <set>
+#include "Communicator.hpp"
+
+int rank, world_size;
 
 inline int bitselect(int condition, int truereturnvalue, int falsereturnvalue) {
     return (truereturnvalue & -condition) | (falsereturnvalue & ~(-condition)); //a when TRUE and b when FintLSE
@@ -32,7 +35,7 @@ inline long long position_to_cell(Point_3 const& position, const double step, co
     return idx;
 }
 */
-
+std::array<MPI_Group, 8> ngr;
 inline std::pair<int, int> cell_to_global_position(int msx, int msy, long long position){
     return std::make_pair(position % msx, (int) position / msx);
 }
@@ -194,7 +197,7 @@ struct Domain {
  * |/        |/
  * 1----X----2
  */
-
+    int num_part;
     Domain (const int x, const int y, const int z):
             v1(0, 0, 0),
             v2(x, 0, 0),
@@ -212,7 +215,8 @@ struct Domain {
             v5(p5),v6(p6),v7(p7),v8(p8) {
     }
 
-    void bootstrap_partitions(unsigned int nb_partitions){
+    void bootstrap_partitions(unsigned int nb_partitions) {
+        num_part = nb_partitions;
         bootstrap_partitions_cubical(nb_partitions, v1, v2, v3, v4, v5, v6, v7, v8);
     }
 
@@ -321,14 +325,27 @@ struct Partition {
     const Domain* d;
     int id;
     std::array<Point_3, 8> vertices;
+    std::array<int, 8>     vertices_id;
     std::array<Tetrahedron_3, 6> tetrahedra;
-    std::array<MPI_Comm, 8> vertex_neighborhood;
+    std::map<int, Communicator> vertex_neighborhood = {
+//            {0, MPI_COMM_NULL},
+//            {1, MPI_COMM_NULL},
+//            {2, MPI_COMM_NULL},
+//            {3, MPI_COMM_NULL},
+//            {4, MPI_COMM_NULL},
+//            {5, MPI_COMM_NULL},
+//            {6, MPI_COMM_NULL},
+//            {7, MPI_COMM_NULL},
+    };
 
     Partition(int id, const Domain* d, Point_3 v1, Point_3 v2, Point_3 v3, Point_3 v4,
               Point_3 v5, Point_3 v6, Point_3 v7, Point_3 v8)
               : id(id), d(d),
               vertices({std::move(v1), std::move(v2), std::move(v3), std::move(v4),
                         std::move(v5), std::move(v6), std::move(v7), std::move(v8)}){
+        for(int j = 0; j < 8; ++j) {
+            vertices_id[j] = get_vertex_id<int>(vertices[j], d->num_part);
+        }
         construct_tetrahedra();
     }
 
@@ -348,8 +365,14 @@ struct Partition {
     }
 
     friend std::ostream &operator<<(std::ostream &os, const Partition &partition) {
-        os << "vertices[1]: " << partition.vertices[0] << " vertices[2]: " << partition.vertices[1] << " vertices[3]: " << partition.vertices[2] << " vertices[4]: " << partition.vertices[3]
-           << " vertices[5]: " << partition.vertices[4] << " vertices[6]: " << partition.vertices[5] << " vertices[7]: " << partition.vertices[6] << " vertices[8]: " << partition.vertices[7];
+        os << " ID(" << partition.vertices_id[0] << "): " << partition.vertices[0]
+           << " ID(" << partition.vertices_id[1] << "): " << partition.vertices[1]
+           << " ID(" << partition.vertices_id[2] << "): " << partition.vertices[2]
+           << " ID(" << partition.vertices_id[3] << "): " << partition.vertices[3]
+           << " ID(" << partition.vertices_id[4] << "): " << partition.vertices[4]
+           << " ID(" << partition.vertices_id[5] << "): " << partition.vertices[5]
+           << " ID(" << partition.vertices_id[6] << "): " << partition.vertices[6]
+           << " ID(" << partition.vertices_id[7] << "): " << partition.vertices[7];
         return os;
     }
 
@@ -365,22 +388,27 @@ struct Partition {
         return vertex + mu*force;
     }
 
-    std::array<std::vector<Point_3>, 8> spread_centers_of_load(const Point_3& cl, const std::array<MPI_Comm, 8>& neighborhood) {
+    std::array<std::vector<Point_3>, 8> spread_centers_of_load(const Point_3& cl, const std::map<int, Communicator>& neighborhood) {
         int N;
         std::array<std::vector<Point_3>, 8> all_cl;
-        std::array<std::vector<double>, 8> buff_all_cl;
-
+        std::array<std::vector<double>,  8> buff_all_cl;
         std::array<MPI_Request, 8> requests;
 
         std::array<double, 3> my_cl = {cl.x(), cl.y(), cl.z()};
-        for(int i = 0; i < 8; ++i) {
-            MPI_Comm_size(neighborhood[i], &N);
+
+        int i = 0;
+        for(auto&  comm : neighborhood) {
+            //MPI_Comm_size(comm.second, &N);
+            N = comm.second.comm_size;
             buff_all_cl[i].resize(3*N);
             all_cl[i].resize(N);
-            MPI_Iallgather(my_cl.data(), 3, MPI_DOUBLE, buff_all_cl[i].data(), 3, MPI_DOUBLE, neighborhood[i], &requests[i]);
+            //MPI_Iallgather(my_cl.data(), 3, MPI_DOUBLE, buff_all_cl[i].data(), 3, MPI_DOUBLE, comm.second, &requests[i]);
+            //std::cout<<comm.second.comm_size<<std::endl;
+            comm.second.Allgather(my_cl.data(), 3, MPI_DOUBLE, buff_all_cl[i].data(), 3, MPI_DOUBLE);
+            ++i;
         }
 
-        MPI_Waitall(8, requests.data(), MPI_STATUSES_IGNORE);
+        //MPI_Waitall(8, requests.data(), MPI_STATUSES_IGNORE);
 
         for(int i = 0; i < 8; ++i) {
             auto N = all_cl[i].size();
@@ -406,6 +434,7 @@ struct Partition {
         int N; MPI_Comm_size(neighborhood, &N);
 
         auto all_loads = get_neighbors_load(my_load, neighborhood); //global load balancing with MPI_COMM_WORLD
+
         auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / N;
 
         //std::for_each(all_loads.cbegin(), all_loads.cend(), [](auto v){ std::cout << v << std::endl; });
@@ -420,7 +449,6 @@ struct Partition {
         std::transform(all_loads.cbegin(), all_loads.cend(), std::back_inserter(normalized_loads), [&avg_load](auto v){return v / avg_load;});
 
         auto center_of_load = get_center_of_load(weights, points);
-
         auto all_cl = spread_centers_of_load(center_of_load, vertex_neighborhood);
 
         for(int i = 0; i < 8; ++i) {
@@ -433,38 +461,53 @@ struct Partition {
             std::copy(cls.begin(), cls.end(),
                       std::ostream_iterator<Point_3>(vts, ", "));
 
-            std::cout <<  get_vertex_id<int>(v, 8) << " | " << rank << std::endl;
+            //std::cout <<  get_vertex_id<int>(v, 8) << " | " << rank << std::endl;
 
             auto f1 = get_vertex_force(v, cls, normalized_loads);
+
             auto f1_after = constraint_force(d, v, f1);
-            auto v_after = move_vertex(v, f1_after, mu);
-            //v = v_after;
+
+
+            v = move_vertex(v, f1_after, mu);
+
         }
         construct_tetrahedra();
     }
 
     template<class NumericalType>
-    NumericalType get_vertex_id(const Point_3& v, int N) {
+    const NumericalType get_vertex_id(const Point_3& v, int N) const {
         auto proc_per_row = (NumericalType) std::cbrt(N) + 1;
-        const double step = this->d->xsize() / proc_per_row;
+        const double step = this->d->xsize() / (proc_per_row-1);
         return position_to_cell<NumericalType>(v, step, proc_per_row, proc_per_row);
     }
 
-    void init_communicators() {
-        int N, x;
-        MPI_Comm_size(MPI_COMM_WORLD, &N);
-        std::vector<int> vertices_id(8);
+    void init_communicators(int world_size) {
+        int N = world_size, x;
 
-        for(int i = 0; i < 8; ++i)  vertices_id[i] = get_vertex_id<int>(vertices[i], N);
-        std::sort(vertices.begin(), vertices.end());
+        std::array<int, 8>  sbuff;
+        std::vector<int> buff(8*N);
+        std::map<int, std::set<int>> neighbors;
 
-        for(int i = 0; i < 8; ++i) {
-            MPI_Comm_split(MPI_COMM_WORLD, vertices_id[i], rank, &vertex_neighborhood[i]);
-            MPI_Comm_size(vertex_neighborhood[i], &x);
-            std::cout << x << std::endl;
+        //for(int i = 0; i < 8; ++i)  vertices_id[i] = get_vertex_id<int>(vertices[i], N);
+        std::copy(vertices_id.begin(), vertices_id.end(), sbuff.begin());
+        std::sort(sbuff.begin(), sbuff.end());
+
+        MPI_Allgather(sbuff.data(), 8, MPI_INT, buff.data(), 8, MPI_INT, MPI_COMM_WORLD);
+
+        for(int j = 0; j < 8; ++j){
+            int vid = vertices_id[j];
+            for(int i = 0; i < N; ++i){
+                auto beg = buff.begin() + i * 8;
+                auto end = buff.begin() + (i+1) * 8;
+
+                if(std::binary_search(beg, end, vid)) neighbors[vid].insert(i);
+            }
+            neighbors[vid].insert(rank);
+            std::vector<int> n_list(neighbors[vid].begin(), neighbors[vid].end());
+            Communicator c(n_list);
+            vertex_neighborhood[vid] = c;
         }
     }
-
 };
 
 Partition& Domain::get_my_partition(int rank) {
@@ -650,12 +693,12 @@ std::vector<Cell> generate_lattice_single_type( int msx, int msy,
 int main() {
     MPI_Init(nullptr, nullptr);
 
-    int wsize;
 
-    MPI_Comm_size(MPI_COMM_WORLD, &wsize);
+
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    int col_row = (int) std::cbrt(wsize);
+    int col_row = (int) std::cbrt(world_size);
 
     Domain d(10, 10, 10);
 
@@ -664,10 +707,10 @@ int main() {
     Cell::get_msy() = 10;
     Cell::get_msx() = 10;
 
-    d.bootstrap_partitions(wsize);
+    d.bootstrap_partitions(world_size);
 
     auto part = d.get_my_partition(rank);
-    part.init_communicators();
+    part.init_communicators(world_size);
 
     std::random_device rd{};
     std::mt19937 gen{rd()};
@@ -698,6 +741,7 @@ int main() {
     part.move_vertices<GridPointTransformer, GridElementComputer, Cell>(my_cells);
 
     std::cout << part << std::endl;
+
 
     MPI_Finalize();
 

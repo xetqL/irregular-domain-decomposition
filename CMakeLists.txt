@@ -16,8 +16,12 @@ include(${CGAL_USE_FILE})
 
 include_directories(SYSTEM ${MPI_INCLUDE_PATH})
 
-add_executable(adlbirreg main.cpp)
+add_executable(adlbirreg main.cpp Communicator.hpp)
+
+add_executable(test_communcation comm.cpp Communicator.hpp)
 
 target_link_libraries(adlbirreg ${CGAL_LIBS})
 
 target_link_libraries(adlbirreg ${MPI_C_LIBRARIES})
+
+target_link_libraries(test_communcation ${MPI_C_LIBRARIES})
