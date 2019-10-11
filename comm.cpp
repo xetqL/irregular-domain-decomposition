@@ -14,15 +14,20 @@ int main(int argc, char** argv){
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     
-    Communicator c({0,  2, 4, 6});
-    
-    std::vector<long long> x  (3);
-    std::iota(x.begin(), x.end(), rank);
-    std::vector<long long> x2 (c.comm_size * x.size());
+    Communicator c1({0,  2, 4, 6});
+    Communicator c2({1,  3, 5, 7});
 
-    c.Allgather(x.data(), x.size(), MPI_LONG_LONG, x2.data(), x.size(), MPI_LONG_LONG);
+    std::vector<long long> x  {rank, rank, rank};
 
-    if(rank == 0) {
+    std::vector<long long> x2 (c1.comm_size * x.size());
+
+    if(rank % 2) {
+        c2.Allgather(x.data(), x.size(), MPI_LONG_LONG, x2.data(), x.size(), MPI_LONG_LONG);
+    } else {
+        c1.Allgather(x.data(), x.size(), MPI_LONG_LONG, x2.data(), x.size(), MPI_LONG_LONG);
+    }
+
+    if(rank == 1) {
         std::for_each(x2.cbegin(), x2.cend(), [&](auto val){std::cout << val << std::endl;});
     }
     

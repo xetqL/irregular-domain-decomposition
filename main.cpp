@@ -12,7 +12,9 @@
 #include <set>
 #include "Communicator.hpp"
 
-int rank, world_size;
+const double sqrt_3 = std::sqrt(3);
+
+int my_rank, world_size;
 
 inline int bitselect(int condition, int truereturnvalue, int falsereturnvalue) {
     return (truereturnvalue & -condition) | (falsereturnvalue & ~(-condition)); //a when TRUE and b when FintLSE
@@ -20,6 +22,7 @@ inline int bitselect(int condition, int truereturnvalue, int falsereturnvalue) {
 
 using Kernel = CGAL::Cartesian<double> ;
 using Point_3 = CGAL::Point_3<Kernel>;
+using Plane_3 = CGAL::Plane_3<Kernel>;
 using Vector_3 = Kernel::Vector_3;
 using Tetrahedron_3 = Kernel::Tetrahedron_3;
 using Transformation = CGAL::Aff_transformation_3<Kernel>;
@@ -35,6 +38,21 @@ inline long long position_to_cell(Point_3 const& position, const double step, co
     return idx;
 }
 */
+
+int get_rank_from_vertices(const std::array<int, 4>& vertices_id, const std::map<int, Communicator>& neighborhoods){
+    std::vector<int> ranks;
+    std::set<int> unique_ranks;
+    for(int vid : vertices_id){
+        auto neighbors = neighborhoods.at(vid).get_ranks();
+        std::copy(neighbors.begin(), neighbors.end(), std::back_inserter(ranks));
+        std::copy(neighbors.begin(), neighbors.end(), std::inserter(unique_ranks, unique_ranks.begin()));
+    }
+    for(int r : unique_ranks) {
+        if(std::count(ranks.cbegin(), ranks.cend(), r) == 4 && r != my_rank) return r;
+    }
+    throw std::runtime_error("nobody owns the 4 vertices?");
+}
+
 std::array<MPI_Group, 8> ngr;
 inline std::pair<int, int> cell_to_global_position(int msx, int msy, long long position){
     return std::make_pair(position % msx, (int) position / msx);
@@ -74,6 +92,14 @@ Point_3 get_center_of_load(const std::vector<double>& weights, const std::vector
 
     return (1.0/total_weight) * r;
 }
+template<class InputIterator>
+std::array<Point_3, 4> get_points_on_plane(InputIterator beg, InputIterator end, const Plane_3& p){
+    std::array<Point_3, 4> on_plane;
+    std::copy_if(beg, end, on_plane.begin(), [&p](auto v){return p.has_on(v);});
+    return on_plane;
+}
+
+
 
 /**
  * To compute the local average load use local communicator, otherwise use MPI_COMM_WORLD
@@ -324,29 +350,23 @@ double compute_mu(const Domain* d, double max_normalized_load);
 struct Partition {
     const Domain* d;
     int id;
-    std::array<Point_3, 8> vertices;
-    std::array<int, 8>     vertices_id;
+    std::array<Point_3, 8>       vertices;
+    std::array<int, 8>           vertices_id;
     std::array<Tetrahedron_3, 6> tetrahedra;
-    std::map<int, Communicator> vertex_neighborhood = {
-//            {0, MPI_COMM_NULL},
-//            {1, MPI_COMM_NULL},
-//            {2, MPI_COMM_NULL},
-//            {3, MPI_COMM_NULL},
-//            {4, MPI_COMM_NULL},
-//            {5, MPI_COMM_NULL},
-//            {6, MPI_COMM_NULL},
-//            {7, MPI_COMM_NULL},
-    };
-
+    std::map<int, Communicator>  vertex_neighborhood;
+    std::array<Plane_3, 6> planes;
     Partition(int id, const Domain* d, Point_3 v1, Point_3 v2, Point_3 v3, Point_3 v4,
               Point_3 v5, Point_3 v6, Point_3 v7, Point_3 v8)
               : id(id), d(d),
               vertices({std::move(v1), std::move(v2), std::move(v3), std::move(v4),
                         std::move(v5), std::move(v6), std::move(v7), std::move(v8)}){
-        for(int j = 0; j < 8; ++j) {
-            vertices_id[j] = get_vertex_id<int>(vertices[j], d->num_part);
-        }
+        for(int j = 0; j < 8; ++j) vertices_id[j] = get_vertex_id<int>(vertices[j], d->num_part);
+        update();
+    }
+
+    void update(){
         construct_tetrahedra();
+        construct_planes();
     }
 
     void construct_tetrahedra() {
@@ -356,12 +376,19 @@ struct Partition {
         tetrahedra[3] = Tetrahedron_3(vertices[0], vertices[2], vertices[6], vertices[7]);
         tetrahedra[4] = Tetrahedron_3(vertices[0], vertices[4], vertices[5], vertices[7]);
         tetrahedra[5] = Tetrahedron_3(vertices[0], vertices[4], vertices[6], vertices[7]);
-
-        //Union of tetrahedra must be equal to Partition, hence sum of volumes = volume of partition
-        /*auto volume = std::abs(tetrahedra[0].volume()) + std::abs(tetrahedra[1].volume()) +
-                      std::abs(tetrahedra[2].volume()) + std::abs(tetrahedra[3].volume()) +
-                      std::abs(tetrahedra[4].volume()) + std::abs(tetrahedra[5].volume());
-        assert(volume - this->get_volume() <= std::numeric_limits<double>::epsilon());*/
+    }
+    void construct_planes() {
+        planes =  {
+            //front face
+            Plane_3(vertices[0], vertices[1], vertices[4]),
+            //connection to next face
+            Plane_3(vertices[0], vertices[2], vertices[4]),
+            Plane_3(vertices[1], vertices[3], vertices[5]),
+            Plane_3(vertices[4], vertices[5], vertices[6]),
+            Plane_3(vertices[1], vertices[2], vertices[3]),
+            //back face
+            Plane_3(vertices[2], vertices[3], vertices[6]),
+        };
     }
 
     friend std::ostream &operator<<(std::ostream &os, const Partition &partition) {
@@ -384,37 +411,83 @@ struct Partition {
          return in_tetrahedron(tetrahedra[0], p) || in_tetrahedron(tetrahedra[1], p) || in_tetrahedron(tetrahedra[2], p) || in_tetrahedron(tetrahedra[3], p) || in_tetrahedron(tetrahedra[4], p) || in_tetrahedron(tetrahedra[5], p);
     }
 
+    template<class CartesianPointTransformer, class A>
+    bool is_ghost(const CartesianPointTransformer& c, const A& p){
+        return is_ghost(c.transform(p));
+    }
+
+    bool is_ghost(const std::array<Plane_3, 6>& planes, const Point_3& p){
+        std::array<double, 12> distances_to_plane;
+        std::transform(planes.cbegin(), planes.cend(), distances_to_plane.begin(), [&p](Plane_3 plane){return CGAL::squared_distance(p, plane);});
+        auto min_distance = std::sqrt(*std::min_element(distances_to_plane.cbegin(), distances_to_plane.cend()));
+        return min_distance <= (std::sqrt(3) * d->grid_cell_size);
+    }
+
+    std::vector<Plane_3> find_planes_closer_than(const std::array<Plane_3, 6>& planes, const Point_3& p, double cut_off) {
+        std::array<double, 6> distances_to_plane;
+        std::transform(planes.cbegin(), planes.cend(), distances_to_plane.begin(), [&p](Plane_3 plane){return std::sqrt(CGAL::squared_distance(p, plane));});
+        std::vector<Plane_3> closest_planes;
+        for(int i = 0; i < 6; ++i){
+            if(distances_to_plane[i] <= cut_off) closest_planes.push_back(planes[i]);
+        }
+        return closest_planes;
+    }
+
+    template<class CartesianPointTransformer, class A>
+    std::vector<std::pair<std::vector<Plane_3>, int>> get_ghosts_and_destination_planes(const std::vector<A>& elements) {
+        CartesianPointTransformer c;
+        std::vector<std::pair<std::vector<Plane_3>, int>> ghosts;
+        const auto size = elements.size();
+        for(int i = 0; i < size; ++i) {
+            auto closest_planes = find_planes_closer_than(planes, c.transform(elements[i]), sqrt_3*d->grid_cell_size);
+            if(closest_planes.size() > 0)
+                ghosts.push_back(std::make_pair(closest_planes, i));
+        }
+        return ghosts;
+    }
+
+    std::vector<std::pair<std::vector<Plane_3>, int>> compute_ghosts_destination_ranks(const std::vector<std::pair<std::vector<Plane_3>, int>>& ghosts_and_planes) {
+
+    }
+
     Point_3 move_vertex(const Point_3& vertex, const Vector_3& force, double mu){
         return vertex + mu*force;
     }
 
-    std::array<std::vector<Point_3>, 8> spread_centers_of_load(const Point_3& cl, const std::map<int, Communicator>& neighborhood) {
+    template<class A>
+    std::vector<A>& get_neighbors_from_vertex_id(std::array<std::pair<int, std::vector<A>>, 8>& linmap, int key) {
+        for(std::pair<int, std::vector<A>>& entry : linmap) {
+            if(entry.first == key) return entry.second;
+        }
+        throw std::runtime_error("doesn't exist");
+    }
+
+    std::array<std::pair<int, std::vector<Point_3>>, 8> spread_centers_of_load(const Point_3& cl, const std::map<int, Communicator>& neighborhood) {
         int N;
-        std::array<std::vector<Point_3>, 8> all_cl;
-        std::array<std::vector<double>,  8> buff_all_cl;
+        std::array<std::pair<int, std::vector<Point_3>>, 8> all_cl;
+        std::array<std::pair<int, std::vector<double>>,  8> buff_all_cl;
         std::array<MPI_Request, 8> requests;
 
         std::array<double, 3> my_cl = {cl.x(), cl.y(), cl.z()};
-
-        int i = 0;
+        int idx = 0;
         for(auto&  comm : neighborhood) {
+            int i = comm.first;
             //MPI_Comm_size(comm.second, &N);
             N = comm.second.comm_size;
-            buff_all_cl[i].resize(3*N);
-            all_cl[i].resize(N);
+            all_cl[idx] = std::make_pair(i, std::vector<Point_3>());
+            buff_all_cl[idx] = std::make_pair(i, std::vector<double>());
+            auto& curr_buff_all_cl = get_neighbors_from_vertex_id(buff_all_cl, i);
+            auto& curr_all_cl = get_neighbors_from_vertex_id(all_cl, i);
+            curr_buff_all_cl.resize(3*N);
+            curr_all_cl.resize(N);
+
             //MPI_Iallgather(my_cl.data(), 3, MPI_DOUBLE, buff_all_cl[i].data(), 3, MPI_DOUBLE, comm.second, &requests[i]);
             //std::cout<<comm.second.comm_size<<std::endl;
-            comm.second.Allgather(my_cl.data(), 3, MPI_DOUBLE, buff_all_cl[i].data(), 3, MPI_DOUBLE);
-            ++i;
-        }
-
-        //MPI_Waitall(8, requests.data(), MPI_STATUSES_IGNORE);
-
-        for(int i = 0; i < 8; ++i) {
-            auto N = all_cl[i].size();
-            for(int j = 0; j < N; ++j) {
-                all_cl[i][j] = Point_3(buff_all_cl[i][j*3],buff_all_cl[i][j*3+1],buff_all_cl[i][j*3+2]);
+            comm.second.Allgather(my_cl.data(), 3, MPI_DOUBLE, curr_buff_all_cl.data(), 3, MPI_DOUBLE);
+            for(int j = 0; j < N; ++j) {// reconstruct the points
+                curr_all_cl[j] = Point_3(curr_buff_all_cl[j*3],curr_buff_all_cl[j*3+1],curr_buff_all_cl[j*3+2]);
             }
+            idx++;
         }
 
         return all_cl;
@@ -427,6 +500,7 @@ struct Partition {
         std::vector<Point_3> points;
 
         double my_load = lc.compute_load(elements);
+
         const std::vector<double>& weights = lc.get_weights(elements);
 
         std::transform(elements.cbegin(), elements.cend(), std::back_inserter(points), [&transformer](auto el){return transformer.transform(el);});
@@ -437,9 +511,8 @@ struct Partition {
 
         auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / N;
 
-        //std::for_each(all_loads.cbegin(), all_loads.cend(), [](auto v){ std::cout << v << std::endl; });
+        std::vector<double> normalized_loads;
 
-        decltype(all_loads) normalized_loads;
         std::transform(all_loads.cbegin(), all_loads.cend(), std::back_inserter(normalized_loads), [&avg_load](auto n){return n/avg_load;});
 
         auto max_normalized_load = *std::max_element(normalized_loads.cbegin(), normalized_loads.cend());
@@ -449,36 +522,18 @@ struct Partition {
         std::transform(all_loads.cbegin(), all_loads.cend(), std::back_inserter(normalized_loads), [&avg_load](auto v){return v / avg_load;});
 
         auto center_of_load = get_center_of_load(weights, points);
+
         auto all_cl = spread_centers_of_load(center_of_load, vertex_neighborhood);
 
         for(int i = 0; i < 8; ++i) {
-            auto& v = vertices[i];
-
-            auto cls = all_cl[i];
-
-            std::ostringstream vts;
-
-            std::copy(cls.begin(), cls.end(),
-                      std::ostream_iterator<Point_3>(vts, ", "));
-
-            //std::cout <<  get_vertex_id<int>(v, 8) << " | " << rank << std::endl;
-
+            auto& v  = vertices[i];
+            auto vid = vertices_id[i];
+            auto cls = get_neighbors_from_vertex_id(all_cl, vid);
             auto f1 = get_vertex_force(v, cls, normalized_loads);
-
             auto f1_after = constraint_force(d, v, f1);
-
-            if(vertices_id[i] == 4){
-                auto ranks = vertex_neighborhood[4].get_ranks();
-                std::ostringstream vts;
-                std::copy(cls.begin(), cls.end(),
-                          std::ostream_iterator<Point_3>(vts, "; "));
-                std::cout << f1 << " ;" << vts.str()  << std::endl;
-
-            }
             v = move_vertex(v, f1_after, mu);
-
         }
-        construct_tetrahedra();
+        update();
     }
 
     template<class NumericalType>
@@ -506,10 +561,9 @@ struct Partition {
             for(int i = 0; i < N; ++i){
                 auto beg = buff.begin() + i * 8;
                 auto end = buff.begin() + (i+1) * 8;
-
                 if(std::binary_search(beg, end, vid)) neighbors[vid].insert(i);
             }
-            neighbors[vid].insert(rank);
+            neighbors[vid].insert(my_rank);
             std::vector<int> n_list(neighbors[vid].begin(), neighbors[vid].end());
             Communicator c(n_list);
             vertex_neighborhood[vid] = c;
@@ -599,6 +653,18 @@ struct Cell {
         return std::make_tuple(x,y,z);
     }
 
+    std::tuple<double, double, double> get_center() const {
+        int x,y,z;
+        linear_to_grid(gid, Cell::get_msx(), Cell::get_msy(), x, y, z); //cell_to_global_position(Cell::get_msx(), Cell::get_msy(), gid);
+        return std::make_tuple(x+Cell::get_cell_size(), y+Cell::get_cell_size(), z+Cell::get_cell_size());
+    }
+
+    void get_center(double* _x, double* _y, double* _z) const {
+        int x,y,z;
+        linear_to_grid(gid, Cell::get_msx(), Cell::get_msy(), x, y, z); //cell_to_global_position(Cell::get_msx(), Cell::get_msy(), gid);
+        *_x=x+Cell::get_cell_size(); *_y=y+Cell::get_cell_size(); *_z =z+Cell::get_cell_size();
+    }
+
     static CommunicationDatatype register_datatype() {
 
         MPI_Datatype cell_datatype, gid_type_datatype;
@@ -651,6 +717,14 @@ struct Cell {
         static int msy;
         return msy;
     }
+    static int& get_msz(){
+        static int msz;
+        return msz;
+    }
+    static double& get_cell_size(){
+        static double size;
+        return size;
+    }
 
     friend std::ostream &operator<<(std::ostream &os, const Cell &cell) {
         os << "gid: " << cell.gid << " type: " << cell.type << " weight: " << cell.weight << " erosion_probability: "
@@ -658,6 +732,7 @@ struct Cell {
         return os;
     }
 };
+
 struct GridElementComputer {
     double compute_load(const std::vector<Cell>& elements){
         return std::accumulate(elements.cbegin(), elements.cend(), 0.0, [](double l, Cell e){return l + e.weight;});
@@ -674,8 +749,8 @@ struct GridElementComputer {
 struct GridPointTransformer {
     Point_3 transform(const Cell& element){
         double x,y,z;
-        std::tie(x,y,z) = element.get_position_as_pair();
-        return Point_3(x,y,z);
+        std::tie(x,y,z) = element.get_center();
+        return Point_3(x, y, z);
     }
 };
 
@@ -703,20 +778,26 @@ int main() {
 
 
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
     int col_row = (int) std::cbrt(world_size);
 
-    Domain d(10, 10, 10);
+    const int DOMAIN_SIZE_X = 10;
+    const int DOMAIN_SIZE_Y = 10;
+    const int DOMAIN_SIZE_Z = 10;
+
+    Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z);
 
     d.grid_cell_size = 1;
 
-    Cell::get_msy() = 10;
-    Cell::get_msx() = 10;
+    Cell::get_msx() = DOMAIN_SIZE_X / d.grid_cell_size;
+    Cell::get_msy() = DOMAIN_SIZE_Y / d.grid_cell_size;
+    Cell::get_msz() = DOMAIN_SIZE_Z / d.grid_cell_size;
+    Cell::get_cell_size() = d.grid_cell_size;
 
     d.bootstrap_partitions(world_size);
 
-    auto part = d.get_my_partition(rank);
+    auto part = d.get_my_partition(my_rank);
     part.init_communicators(world_size);
 
     std::random_device rd{};
@@ -724,7 +805,6 @@ int main() {
     std::normal_distribution<double> normal_distribution(1.0, 0.2);
 
     auto bbox = CGAL::bbox_3(part.vertices.begin(), part.vertices.end());
-
     int cell_in_my_rows = (int) (bbox.xmax() - bbox.xmin()) / d.grid_cell_size;
     int cell_in_my_cols = (int) (bbox.ymax() - bbox.ymin()) / d.grid_cell_size;
 
@@ -732,7 +812,7 @@ int main() {
 
     std::vector<Cell> my_cells; my_cells.reserve(cell_per_process);
 
-    int x_proc_idx, y_proc_idx, z_proc_idx; linear_to_grid(rank, col_row, col_row, x_proc_idx, y_proc_idx, z_proc_idx);
+    int x_proc_idx, y_proc_idx, z_proc_idx; linear_to_grid(my_rank, col_row, col_row, x_proc_idx, y_proc_idx, z_proc_idx);
 
     const int xcells = cell_in_my_rows * col_row, ycells = cell_in_my_rows * col_row, zcells = cell_in_my_rows * col_row;
 

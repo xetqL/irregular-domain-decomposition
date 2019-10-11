@@ -115,7 +115,7 @@ public:
             }
     }
 
-    std::vector<int> get_ranks() { return comm_to_world; }
+    const std::vector<int> get_ranks() const { return comm_to_world; }
 };
 
 
