@@ -26,6 +26,39 @@ using Plane_3 = CGAL::Plane_3<Kernel>;
 using Vector_3 = Kernel::Vector_3;
 using Tetrahedron_3 = Kernel::Tetrahedron_3;
 using Transformation = CGAL::Aff_transformation_3<Kernel>;
+
+std::array<Plane_3, 12> get_planes(const std::array<Point_3, 8>& vertices){
+    return {
+            //front face
+            Plane_3(vertices[1], vertices[4], vertices[0]),
+            Plane_3(vertices[1], vertices[5], vertices[4]),
+            //connection to next face
+            Plane_3(vertices[2], vertices[1], vertices[0]),
+            Plane_3(vertices[2], vertices[3], vertices[1]),
+            Plane_3(vertices[3], vertices[7], vertices[5]),
+            Plane_3(vertices[3], vertices[5], vertices[1]),
+
+            Plane_3(vertices[4], vertices[2], vertices[0]),
+            Plane_3(vertices[4], vertices[6], vertices[2]),
+            Plane_3(vertices[5], vertices[7], vertices[6]),
+            Plane_3(vertices[5], vertices[6], vertices[4]),
+            //back face
+            Plane_3(vertices[6], vertices[3], vertices[2]),
+            Plane_3(vertices[6], vertices[7], vertices[3]),
+    };
+}
+
+std::array<Tetrahedron_3, 6> get_tetrahedra(const std::array<Point_3, 8>& vertices) {
+    return {
+            Tetrahedron_3(vertices[0], vertices[3], vertices[1], vertices[7]),
+            Tetrahedron_3(vertices[0], vertices[1], vertices[5], vertices[7]),
+            Tetrahedron_3(vertices[0], vertices[2], vertices[3], vertices[7]),
+            Tetrahedron_3(vertices[0], vertices[6], vertices[2], vertices[7]),
+            Tetrahedron_3(vertices[0], vertices[5], vertices[4], vertices[7]),
+            Tetrahedron_3(vertices[0], vertices[4], vertices[6], vertices[7])
+    };
+}
+
 /*
 inline long long position_to_cell(Point_3 const& position, const double step, const long long column, const long long row) {
     const std::vector<long long> weight = {1, column, column*row};
@@ -53,7 +86,6 @@ int get_rank_from_vertices(const std::array<int, 4>& vertices_id, const std::map
     throw std::runtime_error("nobody owns the 4 vertices?");
 }
 
-std::array<MPI_Group, 8> ngr;
 inline std::pair<int, int> cell_to_global_position(int msx, int msy, long long position){
     return std::make_pair(position % msx, (int) position / msx);
 }
@@ -86,20 +118,25 @@ Point_3 get_center_of_load(const std::vector<double>& weights, const std::vector
     Point_3 r(0, 0, 0);
 
     for(int i = 0; i < size; ++i) {
-        //std::cout << (weights[i] * elements[i]) << std::endl;
         r = r + (weights[i] * elements[i]);
     }
 
     return (1.0/total_weight) * r;
 }
-template<class InputIterator>
-std::array<Point_3, 4> get_points_on_plane(InputIterator beg, InputIterator end, const Plane_3& p){
-    std::array<Point_3, 4> on_plane;
-    std::copy_if(beg, end, on_plane.begin(), [&p](auto v){return p.has_on(v);});
+
+template<class InputPointIterator, class InputPointIdIterator>
+std::array<int, 4> get_points_on_plane(InputPointIterator beg_points, InputPointIterator end_points,
+                                           InputPointIdIterator beg_id, InputPointIdIterator end_id, const Plane_3& p){
+    std::array<int, 4> on_plane = {-1, -1, -1, -1};
+    int i = 0;
+    for(;beg_points != end_points && beg_id != end_id; beg_points++, beg_id++){
+        if(p.has_on(*beg_points)){
+            on_plane[i] = *beg_id;
+            i++;
+        }
+    }
     return on_plane;
 }
-
-
 
 /**
  * To compute the local average load use local communicator, otherwise use MPI_COMM_WORLD
@@ -123,7 +160,7 @@ inline std::vector<double> get_neighbors_load(double my_load, MPI_Comm neighborh
     //std::for_each(all_loads.cbegin(), all_loads.cend(), [](auto v){ std::cout << "!!"<<v << std::endl; });
     return all_loads;
 }
-
+/*
 std::vector<Point_3> get_centers_of_load_for_vertex(const Point_3& cl, MPI_Comm neighborhood){
     int N;
     MPI_Comm_size(neighborhood, &N);
@@ -136,6 +173,7 @@ std::vector<Point_3> get_centers_of_load_for_vertex(const Point_3& cl, MPI_Comm 
     }
     return centers_of_load;
 }
+ */
 
 double compute_normalized_load(double my_load, double unit) {
     return my_load / unit;
@@ -212,28 +250,18 @@ struct Domain {
     Partition& get_my_partition(int rank);
 
     explicit Domain (std::vector<Partition>& partitions): partitions(partitions) {}
-/*
- *     7---------8
- *    /|        /|
- *   / |       / |
- *  /  |      /  |
- * 5-- 3 ----6 --4
- * |  /      |  /
- * Y Z       | /
- * |/        |/
- * 1----X----2
- */
+
     int num_part;
     Domain (const int x, const int y, const int z):
-            v1(0, 0, 0),
-            v2(x, 0, 0),
-            v3(0, 0, z),
-            v4(x, 0, z),
-            v5(0, y, 0),
-            v6(x, y, 0),
-            v7(0, y, z),
-            v8(x, y, z){
-    }
+            v3(0, 0, 0),
+            v4(x, 0, 0),
+            v1(0, 0, z),
+            v2(x, 0, z),
+            v7(0, y, 0),
+            v8(x, y, 0),
+            v5(0, y, z),
+            v6(x, y, z)
+    {}
 
     Domain (const Point_3& p1,const Point_3& p2,const Point_3& p3,const Point_3& p4,
             const Point_3& p5,const Point_3& p6,const Point_3& p7,const Point_3& p8):
@@ -294,18 +322,20 @@ struct Domain {
         Transformation translate_up(     CGAL::TRANSLATION, Vector_3(0, std::abs(p1.y() - p5.y()) / proc_per_row, 0));
         Transformation translate_fulldown(     CGAL::TRANSLATION, Vector_3(0, -row_size * std::abs(p1.y() - p5.y()) * p_m1, 0));
 
-        Transformation translate_forward(CGAL::TRANSLATION, Vector_3(0, 0, std::abs(p1.z() - p3.z()) / proc_per_row));
+        Transformation translate_forward(CGAL::TRANSLATION, Vector_3(0, 0,   std::abs(p1.z() - p3.z()) / proc_per_row));
+        Transformation translate_backward(CGAL::TRANSLATION, Vector_3(0, 0, -std::abs(p1.z() - p3.z()) / proc_per_row));
         Transformation translate_fullbackward(CGAL::TRANSLATION, Vector_3(0, 0, -row_size * std::abs(p1.z() - p3.z()) * p_m1));
+        Transformation translate_fullforward(CGAL::TRANSLATION, Vector_3(0, 0, row_size * std::abs(p1.z() - p3.z()) * p_m1));
 
         std::array<Point_3, 8> partition_vertices =
                 {p1,
                  translate_right(p1),
-                 translate_forward(p1),
-                 translate_forward(translate_right(p1)),
+                 translate_backward(p1),
+                 translate_backward(translate_right(p1)),
                  translate_up(p1),
                  translate_up(translate_right(p1)),
-                 translate_forward(translate_up(p1)),
-                 translate_forward(translate_up(translate_right(p1)))};
+                 translate_backward(translate_up(p1)),
+                 translate_backward(translate_up(translate_right(p1)))};
 
         int id = 0;
         for(int i = 0; i < row_size; ++i) {
@@ -322,7 +352,7 @@ struct Domain {
                 for(auto &pv : partition_vertices) pv = translate_up(pv);
             }
             for(auto &pv : partition_vertices) pv = translate_fulldown(pv);
-            for(auto &pv : partition_vertices) pv = translate_forward(pv);
+            for(auto &pv : partition_vertices) pv = translate_backward(pv);
         }
     }
 
@@ -345,17 +375,34 @@ struct Domain {
 
 };
 
+Point_3 move_vertex(const Point_3& vertex, const Vector_3& force, double mu){
+    return vertex + mu*force;
+}
+
+template<class A>
+std::vector<A>& get_neighbors_from_vertex_id(std::array<std::pair<int, std::vector<A>>, 8>& linmap, int key) {
+    for(std::pair<int, std::vector<A>>& entry : linmap) {
+        if(entry.first == key) return entry.second;
+    }
+    throw std::runtime_error("doesn't exist");
+}
+
 Vector_3 constraint_force(const Domain* d, const Point_3& p, const Vector_3& f);
 double compute_mu(const Domain* d, double max_normalized_load);
 struct Partition {
     const Domain* d;
     int id;
+
     std::array<Point_3, 8>       vertices;
     std::array<int, 8>           vertices_id;
+
     std::array<Tetrahedron_3, 6> tetrahedra;
+
     std::map<int, Communicator>  vertex_neighborhood;
-    std::array<Plane_3, 6> planes;
-    Partition(int id, const Domain* d, Point_3 v1, Point_3 v2, Point_3 v3, Point_3 v4,
+    std::array<Plane_3, 12> planes;
+
+    Partition(int id, const Domain* d,
+              Point_3 v1, Point_3 v2, Point_3 v3, Point_3 v4,
               Point_3 v5, Point_3 v6, Point_3 v7, Point_3 v8)
               : id(id), d(d),
               vertices({std::move(v1), std::move(v2), std::move(v3), std::move(v4),
@@ -368,28 +415,253 @@ struct Partition {
         construct_tetrahedra();
         construct_planes();
     }
+/*
+    double lb_getTetraederVolumeIndexed(int c1, int c2, int c3, int c4 ) {
+        double dir1_0, dir1_1, dir1_2;
+        double dir2_0, dir2_1, dir2_2;
+        double dir3_0, dir3_1, dir3_2;
+
+        dir1_0 = vertices[c2].x() - vertices[c1].x();
+        dir1_1 = vertices[c2].y() - vertices[c1].y();
+        dir1_2 = vertices[c2].z() - vertices[c1].z();
+
+        dir2_0 = vertices[c3].x() - vertices[c1].x();
+        dir2_1 = vertices[c3].y() - vertices[c1].y();
+        dir2_2 = vertices[c3].z() - vertices[c1].z();
+
+        dir3_0 = vertices[c4].x() - vertices[c1].x();
+        dir3_1 = vertices[c4].y() - vertices[c1].y();
+        dir3_2 = vertices[c4].z() - vertices[c1].z();
+
+        return (dir1_0 * (dir3_1 * dir2_2 - dir3_2 * dir2_1) +
+                dir1_1 * (dir3_2 * dir2_0 - dir3_0 * dir2_2) +
+                dir1_2 * (dir3_0 * dir2_1 - dir3_1 * dir2_0)) ;
+    }*/
+    double lb_getTetraederVolumeIndexed(int c1, int c2, int c3, int c4, const std::array<Point_3, 8> vertices) {
+        double dir1_0, dir1_1, dir1_2;
+        double dir2_0, dir2_1, dir2_2;
+        double dir3_0, dir3_1, dir3_2;
+
+        dir1_0 = vertices[c2].x() - vertices[c1].x();
+        dir1_1 = vertices[c2].y() - vertices[c1].y();
+        dir1_2 = vertices[c2].z() - vertices[c1].z();
+
+        dir2_0 = vertices[c3].x() - vertices[c1].x();
+        dir2_1 = vertices[c3].y() - vertices[c1].y();
+        dir2_2 = vertices[c3].z() - vertices[c1].z();
+
+        dir3_0 = vertices[c4].x() - vertices[c1].x();
+        dir3_1 = vertices[c4].y() - vertices[c1].y();
+        dir3_2 = vertices[c4].z() - vertices[c1].z();
+
+        return (dir1_0 * (dir3_1 * dir2_2 - dir3_2 * dir2_1) +
+                dir1_1 * (dir3_2 * dir2_0 - dir3_0 * dir2_2) +
+                dir1_2 * (dir3_0 * dir2_1 - dir3_1 * dir2_0)) ;
+    }
+
+    bool lb_isGeometryValid(const std::array<Point_3, 8>& vertices, const std::array<Plane_3, 12>& planes){
+        /* In comparision to the set of rules in the plimpton scheme, these values are less strict
+             * Except for the tetrahedron volumes, the checks are not necessary, but prevent the domain
+             * from degenerating to severely, which can cause problems in the convergence behavior.
+             * The movement of corners is otherwise likely to get stuck in local minima.
+             */
+        /* Tetrahedral subvolumes in the domain must be positively oriented */
+        /* Self-intersecting cubes are bad, very bad*/
+        /* Test all four permutations of how the cube can be split into tetrahedrons*/
+        double v;
+        if (lb_getTetraederVolumeIndexed(0, 5, 4, 7, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(0, 5, 4, 7, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(0, 3, 1, 7, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(0, 3, 1, 7, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(0, 1, 5, 7, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(0, 1, 5, 7, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(0, 4, 6, 7, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(0, 4, 6, 7, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(0, 6, 2, 7, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(0, 6, 2, 7, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(0, 2, 3, 7, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(0, 2, 3, 7, vertices) << std::endl;
+            return false;
+        }
+
+        if (lb_getTetraederVolumeIndexed(1, 7, 5, 6, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(1, 7, 5, 6, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(1, 2, 3, 6, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(1, 2, 3, 6, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(1, 3, 7, 6, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(1, 3, 7, 6, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(1, 5, 4, 6, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(1, 5, 4, 6, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(1, 4, 0, 6, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(1, 4, 0, 6, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(1, 0, 2, 6, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(1, 0, 2, 6, vertices) << std::endl;
+            return false;
+        }
+
+        if (lb_getTetraederVolumeIndexed(2, 4, 6, 5, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(2, 4, 6, 5, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(2, 1, 0, 5, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(2, 1, 0, 5, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(2, 0, 4, 5, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(2, 0, 4, 5, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(2, 6, 7, 5, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(2, 6, 7, 5, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(2, 7, 3, 5, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(2, 7, 3, 5, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(2, 3, 1, 5, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(2, 3, 1, 5, vertices) << std::endl;
+            return false;
+        }
+
+        if (lb_getTetraederVolumeIndexed(3, 6, 7, 4, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(3, 6, 7, 4, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(3, 0, 2, 4, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(3, 0, 2, 4, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(3, 2, 6, 4, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(3, 2, 6, 4, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(3, 7, 5, 4, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(3, 7, 5, 4, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(3, 5, 1, 4, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(3, 5, 1, 4, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(3, 1, 0, 4, vertices) <= 0) {
+            std::cout << lb_getTetraederVolumeIndexed(3, 1, 0, 4, vertices) << std::endl;
+            return false;
+        }
+
+        //Additionally prevent the collapse of the corners in the domain
+        //This would yield a topological different domain geometry
+        if (lb_getTetraederVolumeIndexed(0, 1, 4, 2, vertices) < 0) {
+            std::cout << lb_getTetraederVolumeIndexed(0, 1, 4, 2, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(1, 5, 4, 7, vertices) < 0) {
+            std::cout << lb_getTetraederVolumeIndexed(1, 5, 4, 7, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(2, 4, 6, 7, vertices) < 0) {
+            std::cout << lb_getTetraederVolumeIndexed(2, 4, 6, 7, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(2, 7, 3, 1, vertices) < 0) {
+            std::cout << lb_getTetraederVolumeIndexed(2, 7, 3, 1, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(0, 4, 6, 5, vertices) < 0) {
+            std::cout << lb_getTetraederVolumeIndexed(0, 4, 6, 5, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(0, 1, 5, 3, vertices) < 0) {
+            std::cout << lb_getTetraederVolumeIndexed(0, 1, 5, 3, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(0, 6, 2, 3, vertices) < 0) {
+            std::cout << lb_getTetraederVolumeIndexed(0, 6, 2, 3, vertices) << std::endl;
+            return false;
+        }
+        if (lb_getTetraederVolumeIndexed(5, 3, 7, 6, vertices) < 0) {
+            std::cout << lb_getTetraederVolumeIndexed(5, 3, 7, 6, vertices) << std::endl;
+            return false;
+        }
+
+        std::array<std::array<Plane_3, 6>, 8> incident_planes;
+
+        for(int i = 0; i < 8; ++i){
+            auto vertex = vertices[i];
+            std::copy_if(planes.begin(), planes.end(), incident_planes[i].begin(), [&vertex](auto plane){return plane.has_on(vertex);});
+        }
+
+        for(int i = 0; i < 4; ++i){
+            // dist from i to incident(7-i)
+            for(auto const& plane: incident_planes[7-i]) {
+                if( CGAL::squared_distance(vertices[i], plane) <= std::pow(sqrt_3*d->grid_cell_size, 2)) return false;
+            }
+        }
+
+//
+//            // dist from 1 to incident(6)
+//            for(auto const& plane: incident_planes[6]) {
+//                if( CGAL::squared_distance(v[1], plane) <= std::pow(sqrt_3*d->grid_cell_size, 2)) return false;
+//            }
+//            // dist from 2 to incident(5)
+//            for(auto const& plane: incident_planes[5]) {
+//                if( CGAL::squared_distance(v[2], plane) <= std::pow(sqrt_3*d->grid_cell_size, 2)) return false;
+//            }
+//            // dist from 3 to incident(4)
+//            for(auto const& plane: incident_planes[4]) {
+//                if( CGAL::squared_distance(v[3], plane) <= std::pow(sqrt_3*d->grid_cell_size, 2)) return false;
+//            }
+
+
+
+        return true;
+    }
+
+    bool lb_isGeometryValid() {
+        return lb_isGeometryValid(vertices, planes);
+    }
 
     void construct_tetrahedra() {
-        tetrahedra[0] = Tetrahedron_3(vertices[0], vertices[1], vertices[3], vertices[7]);
-        tetrahedra[1] = Tetrahedron_3(vertices[0], vertices[1], vertices[5], vertices[7]);
-        tetrahedra[2] = Tetrahedron_3(vertices[0], vertices[2], vertices[3], vertices[7]);
-        tetrahedra[3] = Tetrahedron_3(vertices[0], vertices[2], vertices[6], vertices[7]);
-        tetrahedra[4] = Tetrahedron_3(vertices[0], vertices[4], vertices[5], vertices[7]);
-        tetrahedra[5] = Tetrahedron_3(vertices[0], vertices[4], vertices[6], vertices[7]);
+        tetrahedra = get_tetrahedra(vertices);
     }
+
+/*
+ *     6---------7
+ *    /|        /|
+ *   / |       / |
+ *  /  |      /  |
+ * 4-- 2 ----5 --3
+ * |  /      |  /
+ * Y Z       | /
+ * |/        |/
+ * 0----X----1
+ */
+
     void construct_planes() {
-        planes =  {
-            //front face
-            Plane_3(vertices[0], vertices[1], vertices[4]),
-            //connection to next face
-            Plane_3(vertices[0], vertices[2], vertices[4]),
-            Plane_3(vertices[1], vertices[3], vertices[5]),
-            Plane_3(vertices[4], vertices[5], vertices[6]),
-            Plane_3(vertices[1], vertices[2], vertices[3]),
-            //back face
-            Plane_3(vertices[2], vertices[3], vertices[6]),
-        };
+        planes =  get_planes(vertices);
     }
+
+
 
     friend std::ostream &operator<<(std::ostream &os, const Partition &partition) {
         os << " ID(" << partition.vertices_id[0] << "): " << partition.vertices[0]
@@ -412,7 +684,7 @@ struct Partition {
     }
 
     template<class CartesianPointTransformer, class A>
-    bool is_ghost(const CartesianPointTransformer& c, const A& p){
+    bool is_ghost(const CartesianPointTransformer& c, const A& p) {
         return is_ghost(c.transform(p));
     }
 
@@ -446,20 +718,17 @@ struct Partition {
         return ghosts;
     }
 
-    std::vector<std::pair<std::vector<Plane_3>, int>> compute_ghosts_destination_ranks(const std::vector<std::pair<std::vector<Plane_3>, int>>& ghosts_and_planes) {
-
-    }
-
-    Point_3 move_vertex(const Point_3& vertex, const Vector_3& force, double mu){
-        return vertex + mu*force;
-    }
-
-    template<class A>
-    std::vector<A>& get_neighbors_from_vertex_id(std::array<std::pair<int, std::vector<A>>, 8>& linmap, int key) {
-        for(std::pair<int, std::vector<A>>& entry : linmap) {
-            if(entry.first == key) return entry.second;
+    std::vector<std::pair<std::vector<int>, int>> compute_ghosts_destination_ranks(const std::vector<std::pair<std::vector<Plane_3>, int>>& ghosts_and_planes) {
+        std::vector<std::pair<std::vector<int>, int>> ghost_and_ranks;
+        for(auto const& ghost_and_planes : ghosts_and_planes) {
+            std::vector<int> neighbors_of;
+            for(auto& plane : ghost_and_planes.first) {
+                auto vertices_on_plane = get_points_on_plane(vertices.begin(), vertices.end(), vertices_id.begin(), vertices_id.end(), plane);
+                neighbors_of.push_back(get_rank_from_vertices(vertices_on_plane, vertex_neighborhood));
+            }
+            ghost_and_ranks.emplace_back(neighbors_of, ghost_and_planes.second);
         }
-        throw std::runtime_error("doesn't exist");
+        return ghost_and_ranks;
     }
 
     std::array<std::pair<int, std::vector<Point_3>>, 8> spread_centers_of_load(const Point_3& cl, const std::map<int, Communicator>& neighborhood) {
@@ -472,7 +741,6 @@ struct Partition {
         int idx = 0;
         for(auto&  comm : neighborhood) {
             int i = comm.first;
-            //MPI_Comm_size(comm.second, &N);
             N = comm.second.comm_size;
             all_cl[idx] = std::make_pair(i, std::vector<Point_3>());
             buff_all_cl[idx] = std::make_pair(i, std::vector<double>());
@@ -480,20 +748,42 @@ struct Partition {
             auto& curr_all_cl = get_neighbors_from_vertex_id(all_cl, i);
             curr_buff_all_cl.resize(3*N);
             curr_all_cl.resize(N);
-
-            //MPI_Iallgather(my_cl.data(), 3, MPI_DOUBLE, buff_all_cl[i].data(), 3, MPI_DOUBLE, comm.second, &requests[i]);
-            //std::cout<<comm.second.comm_size<<std::endl;
             comm.second.Allgather(my_cl.data(), 3, MPI_DOUBLE, curr_buff_all_cl.data(), 3, MPI_DOUBLE);
             for(int j = 0; j < N; ++j) {// reconstruct the points
                 curr_all_cl[j] = Point_3(curr_buff_all_cl[j*3],curr_buff_all_cl[j*3+1],curr_buff_all_cl[j*3+2]);
             }
             idx++;
         }
-
         return all_cl;
     }
 
-    template<class CartesianPointTransformer, class LoadComputer, class A>
+
+    bool is_valid_move(const std::array<Plane_3, 12>& p, const std::array<Point_3, 8>& v) {
+        std::array<std::array<Plane_3, 6>, 8> incident_planes;//could be changed to 3->6 but I don't know why?
+        for(int i = 0; i < 8; ++i){
+            auto vertex = v[i];
+            std::copy_if(p.begin(), p.end(), incident_planes[i].begin(), [&vertex](auto plane){return plane.has_on(vertex);});
+        }
+        // dist from 0 to incident(7)
+        for(auto const& plane: incident_planes[7]) {
+            if( CGAL::squared_distance(v[0], plane) <= std::pow(sqrt_3*d->grid_cell_size, 2)) return false;
+        }
+        // dist from 1 to incident(6)
+        for(auto const& plane: incident_planes[6]) {
+            if( CGAL::squared_distance(v[1], plane) <= std::pow(sqrt_3*d->grid_cell_size, 2)) return false;
+        }
+        // dist from 2 to incident(5)
+        for(auto const& plane: incident_planes[5]) {
+            if( CGAL::squared_distance(v[2], plane) <= std::pow(sqrt_3*d->grid_cell_size, 2)) return false;
+        }
+        // dist from 3 to incident(4)
+        for(auto const& plane: incident_planes[4]) {
+            if( CGAL::squared_distance(v[3], plane) <= std::pow(sqrt_3*d->grid_cell_size, 2)) return false;
+        }
+        return true;
+    }
+
+    template<class CartesianPointTransformer, class LoadComputer, class MoveMethod, class A>
     void move_vertices(const std::vector<A>& elements, MPI_Comm neighborhood = MPI_COMM_WORLD) {
         LoadComputer lc;
         CartesianPointTransformer transformer;
@@ -523,17 +813,34 @@ struct Partition {
 
         auto center_of_load = get_center_of_load(weights, points);
 
-        auto all_cl = spread_centers_of_load(center_of_load, vertex_neighborhood);
+        std::array<std::pair<int, std::vector<Point_3>>, 8> all_cl = spread_centers_of_load(center_of_load, vertex_neighborhood);
+        std::vector<int> vertex_local_id_to_move = {0,1,2,3,4,5,6,7,8};
 
-        for(int i = 0; i < 8; ++i) {
-            auto& v  = vertices[i];
-            auto vid = vertices_id[i];
-            auto cls = get_neighbors_from_vertex_id(all_cl, vid);
-            auto f1 = get_vertex_force(v, cls, normalized_loads);
-            auto f1_after = constraint_force(d, v, f1);
-            v = move_vertex(v, f1_after, mu);
-        }
-        update();
+        MoveMethod move_method(vertex_local_id_to_move);
+
+            auto new_vertices = move_method.template move(vertices, vertices_id, d, normalized_loads, all_cl,
+                                                                mu, vertex_local_id_to_move,
+                                                                get_neighbors_from_vertex_id<Point_3>, get_vertex_force,
+                                                                constraint_force, move_vertex);
+            if(!lb_isGeometryValid(new_vertices, get_planes(new_vertices))) {
+                std::cout << "mu/2" << std::endl;
+                mu /= 2.0;
+            } else {
+                vertices = new_vertices;
+                update();
+            }
+
+
+//        for(int i = 0; i < 8; ++i) {
+//            auto& v  = vertices[i];
+//            auto vid = vertices_id[i];
+//            auto cls = get_neighbors_from_vertex_id(all_cl, vid);
+//            auto f1 = get_vertex_force(v, cls, normalized_loads);
+//            auto f1_after = constraint_force(d, v, f1);
+//            v = move_vertex(v, f1_after, mu);
+//        }
+
+
     }
 
     template<class NumericalType>
@@ -556,9 +863,9 @@ struct Partition {
 
         MPI_Allgather(sbuff.data(), 8, MPI_INT, buff.data(), 8, MPI_INT, MPI_COMM_WORLD);
 
-        for(int j = 0; j < 8; ++j){
+        for(int j = 0; j < 8; ++j) {
             int vid = vertices_id[j];
-            for(int i = 0; i < N; ++i){
+            for(int i = 0; i < N; ++i) {
                 auto beg = buff.begin() + i * 8;
                 auto end = buff.begin() + (i+1) * 8;
                 if(std::binary_search(beg, end, vid)) neighbors[vid].insert(i);
@@ -754,6 +1061,47 @@ struct GridPointTransformer {
     }
 };
 
+struct GlobalMoveMethod {
+    using  LocalVertexId  = int;
+    using GlobalVertexId  = int;
+    using RejectionCount  = int;
+
+    template<class A>
+    using CenterOfLoadsDB = std::array<std::pair<int, std::vector<A>>, 8>;
+    std::vector<std::pair<LocalVertexId, RejectionCount>> rejection_count_by_vertex;
+
+    GlobalMoveMethod(const std::vector<LocalVertexId>& vertices_to_move) {
+        rejection_count_by_vertex.resize(vertices_to_move.size());
+        std::transform(vertices_to_move.cbegin(), vertices_to_move.cend(), rejection_count_by_vertex.begin(), [](auto varrid) {return std::make_pair(varrid, 0);});
+    }
+
+    template<class GetNeighborFunc, class GetVertexFunc, class ConstraintForceFunc, class MoveVertexFunc>
+    std::array<Point_3, 8> move(const std::array<Point_3, 8>& vertices,
+                                    const std::array<int, 8>& vertices_id,
+                                    const Domain* d,
+                                    const std::vector<double>& normalized_loads,
+                                    CenterOfLoadsDB<Point_3> & all_cl,
+                                    const double mu,
+                                    const std::vector<LocalVertexId>& vertices_to_move,
+                                    const GetNeighborFunc& get_neighbors,
+                                    const GetVertexFunc& get_vertex_force,
+                                    const ConstraintForceFunc& constraint_force,
+                                    const MoveVertexFunc& move_vertex ) {
+        std::array<Point_3, 8> new_vertices;
+
+        for(int i = 0; i < 8; ++i) {
+            auto v  = vertices[i];
+            auto vid = vertices_id[i];
+            auto cls = get_neighbors(all_cl, vid);
+            auto f1 = get_vertex_force(v, cls, normalized_loads);
+            auto f1_after = constraint_force(d, v, f1);
+            new_vertices[i] = move_vertex(v, f1_after, mu);
+        }
+
+        return new_vertices;
+    }
+};
+
 std::vector<Cell> generate_lattice_single_type( int msx, int msy,
                                                 int x_proc_idx, int y_proc_idx,
                                                 int cell_in_my_cols, int cell_in_my_rows,
@@ -766,16 +1114,11 @@ std::vector<Cell> generate_lattice_single_type( int msx, int msy,
             my_cells.emplace_back(gid, type, weight, erosion_probability);
         }
     }
-
     return my_cells;
 }
 
-
-
 int main() {
     MPI_Init(nullptr, nullptr);
-
-
 
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
@@ -825,7 +1168,7 @@ int main() {
         }
     }
 
-    part.move_vertices<GridPointTransformer, GridElementComputer, Cell>(my_cells);
+    part.move_vertices<GridPointTransformer, GridElementComputer, GlobalMoveMethod, Cell>(my_cells);
 
     std::cout << part << std::endl;
 
