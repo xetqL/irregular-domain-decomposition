@@ -10,6 +10,17 @@
 #include <vector>
 #include <cmath>
 
+short get_type_size(MPI_Datatype type){
+
+    if(type == MPI_INT)return sizeof(int);
+    if(type == MPI_DOUBLE)return sizeof(double);
+    if(type == MPI_FLOAT)return sizeof(float);
+    if(type == MPI_SHORT)return sizeof(short);
+    if(type == MPI_LONG)return sizeof(long);
+    if(type == MPI_LONG_LONG)return sizeof(long long);
+    return -1;
+}
+
 class Communicator {
     std::vector<int> comm_to_world;
     std::map<int, int> world_to_comm;
@@ -88,13 +99,7 @@ public:
             return;
         }
         int i = 0;
-        short size;
-        if(sendtype == MPI_INT)size         = sizeof(int);
-        if(sendtype == MPI_DOUBLE)size      = sizeof(double);
-        if(sendtype == MPI_FLOAT)size       = sizeof(float);
-        if(sendtype == MPI_SHORT)size       = sizeof(short);
-        if(sendtype == MPI_LONG)size        = sizeof(long);
-        if(sendtype == MPI_LONG_LONG)size   = sizeof(long long);
+        short size = get_type_size(sendtype);
 
         int dim = (int)(std::log2(comm_to_world.size()));
         if(std::pow(2, dim) == comm_to_world.size())
