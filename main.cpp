@@ -78,7 +78,7 @@ double lb_getTetraederVolumeIndexed(int c1, int c2, int c3, int c4, const std::a
 
     return (dir1_0 * (dir3_1 * dir2_2 - dir3_2 * dir2_1) +
             dir1_1 * (dir3_2 * dir2_0 - dir3_0 * dir2_2) +
-            dir1_2 * (dir3_0 * dir2_1 - dir3_1 * dir2_0)) ;
+            dir1_2 * (dir3_0 * dir2_1 - dir3_1 * dir2_0));
 }
 
 /*
@@ -177,9 +177,7 @@ inline std::vector<double> get_neighbors_load(double my_load, MPI_Comm neighborh
     int N;
     MPI_Comm_size(MPI_COMM_WORLD, &N);
     std::vector<double> all_loads(N);
-    //std::cout << "> "<< my_load << std::endl;
     MPI_Allgather(&my_load, 1, MPI_DOUBLE, all_loads.data(), 1, MPI_DOUBLE, MPI_COMM_WORLD);
-    //std::for_each(all_loads.cbegin(), all_loads.cend(), [](auto v){ std::cout << "!!"<<v << std::endl; });
     return all_loads;
 }
 /*
@@ -358,7 +356,7 @@ Point_3 move_vertex(const Point_3& vertex, const Vector_3& force, double mu){
 }
 
 template<class A>
-std::vector<A>& get_neighbors_from_vertex_id(std::array<std::pair<int, std::vector<A>>, 8>& linmap, int key) {
+std::vector<A>& search_in_linear_hashmap(std::array<std::pair<int, std::vector<A>>, 8>& linmap, int key) {
     for(std::pair<int, std::vector<A>>& entry : linmap) {
         if(entry.first == key) return entry.second;
     }
@@ -384,7 +382,8 @@ struct Partition {
               : coord(coord), d(d),
               vertices({std::move(v1), std::move(v2), std::move(v3), std::move(v4),
                         std::move(v5), std::move(v6), std::move(v7), std::move(v8)}){
-        for(int j = 0; j < 8; ++j) vertices_id[j] = get_vertex_id<int>(vertices[j], d->num_part);
+        for(int j = 0; j < 8; ++j)
+            vertices_id[j] = get_vertex_id<int>(vertices[j], d->num_part);
         update();
     }
 
@@ -392,29 +391,6 @@ struct Partition {
         construct_tetrahedra();
         construct_planes();
     }
-/*
-    double lb_getTetraederVolumeIndexed(int c1, int c2, int c3, int c4 ) {
-        double dir1_0, dir1_1, dir1_2;
-        double dir2_0, dir2_1, dir2_2;
-        double dir3_0, dir3_1, dir3_2;
-
-        dir1_0 = vertices[c2].x() - vertices[c1].x();
-        dir1_1 = vertices[c2].y() - vertices[c1].y();
-        dir1_2 = vertices[c2].z() - vertices[c1].z();
-
-        dir2_0 = vertices[c3].x() - vertices[c1].x();
-        dir2_1 = vertices[c3].y() - vertices[c1].y();
-        dir2_2 = vertices[c3].z() - vertices[c1].z();
-
-        dir3_0 = vertices[c4].x() - vertices[c1].x();
-        dir3_1 = vertices[c4].y() - vertices[c1].y();
-        dir3_2 = vertices[c4].z() - vertices[c1].z();
-
-        return (dir1_0 * (dir3_1 * dir2_2 - dir3_2 * dir2_1) +
-                dir1_1 * (dir3_2 * dir2_0 - dir3_0 * dir2_2) +
-                dir1_2 * (dir3_0 * dir2_1 - dir3_1 * dir2_0)) ;
-    }*/
-
 
     bool lb_isGeometryValid(const std::array<Point_3, 8>& vertices, const std::array<Plane_3, 12>& planes){
         /* In comparision to the set of rules in the plimpton scheme, these values are less strict
@@ -575,22 +551,6 @@ struct Partition {
             }
         }
 
-//
-//            // dist from 1 to incident(6)
-//            for(auto const& plane: incident_planes[6]) {
-//                if( CGAL::squared_distance(v[1], plane) <= std::pow(sqrt_3*d->grid_cell_size, 2)) return false;
-//            }
-//            // dist from 2 to incident(5)
-//            for(auto const& plane: incident_planes[5]) {
-//                if( CGAL::squared_distance(v[2], plane) <= std::pow(sqrt_3*d->grid_cell_size, 2)) return false;
-//            }
-//            // dist from 3 to incident(4)
-//            for(auto const& plane: incident_planes[4]) {
-//                if( CGAL::squared_distance(v[3], plane) <= std::pow(sqrt_3*d->grid_cell_size, 2)) return false;
-//            }
-
-
-
         return true;
     }
 
@@ -663,7 +623,25 @@ struct Partition {
     }
 
     template<class CartesianPointTransformer, class A>
-    std::vector<std::pair<std::vector<Plane_3>, int>> get_ghosts_and_destination_planes(const std::vector<A>& elements) {
+    void move_data(const std::vector<A>& elements) {
+        CartesianPointTransformer c;
+        std::array<std::vector<A>, 26> to_move;
+        const auto size = elements.size();
+        for(int i = 0; i < size; ++i) {
+            const auto& e = elements.at(i);
+            auto closest_planes = find_planes_closer_than(planes, c.transform(elements[i]), sqrt_3*d->grid_cell_size);
+            if(closest_planes.size() > 0)
+                ghosts.push_back(std::make_pair(closest_planes, i));
+            if(this->is_inside(c.transform(e))) {
+
+            } else {
+
+            }
+        }
+    }
+
+    template<class CartesianPointTransformer, class A>
+    std::vector<std::pair<std::vector<Plane_3>, int> > get_ghosts_and_destination_planes(const std::vector<A>& elements) {
         CartesianPointTransformer c;
         std::vector<std::pair<std::vector<Plane_3>, int>> ghosts;
         const auto size = elements.size();
@@ -698,11 +676,11 @@ struct Partition {
         int idx = 0;
         for(auto&  comm : neighborhood) {
             int i = comm.first;
-            N = comm.second.comm_size;
+            N     = comm.second.comm_size;
             all_cl[idx] = std::make_pair(i, std::vector<Point_3>());
             buff_all_cl[idx] = std::make_pair(i, std::vector<double>());
-            auto& curr_buff_all_cl = get_neighbors_from_vertex_id(buff_all_cl, i);
-            auto& curr_all_cl = get_neighbors_from_vertex_id(all_cl, i);
+            auto& curr_buff_all_cl = search_in_linear_hashmap(buff_all_cl, i);
+            auto& curr_all_cl      = search_in_linear_hashmap(all_cl, i);
             curr_buff_all_cl.resize(3*N);
             curr_all_cl.resize(N);
             comm.second.Allgather(my_cl.data(), 3, MPI_DOUBLE, curr_buff_all_cl.data(), 3, MPI_DOUBLE);
@@ -714,30 +692,14 @@ struct Partition {
         return all_cl;
     }
 
-
-    bool is_valid_move(const std::array<Plane_3, 12>& p, const std::array<Point_3, 8>& v) {
-        std::array<std::array<Plane_3, 6>, 8> incident_planes;//could be changed to 3->6 but I don't know why?
-        for(int i = 0; i < 8; ++i){
-            auto vertex = v[i];
-            std::copy_if(p.begin(), p.end(), incident_planes[i].begin(), [&vertex](auto plane){return plane.has_on(vertex);});
-        }
-        // dist from 0 to incident(7)
-        for(auto const& plane: incident_planes[7]) {
-            if( CGAL::squared_distance(v[0], plane) <= std::pow(sqrt_3*d->grid_cell_size, 2)) return false;
-        }
-        // dist from 1 to incident(6)
-        for(auto const& plane: incident_planes[6]) {
-            if( CGAL::squared_distance(v[1], plane) <= std::pow(sqrt_3*d->grid_cell_size, 2)) return false;
-        }
-        // dist from 2 to incident(5)
-        for(auto const& plane: incident_planes[5]) {
-            if( CGAL::squared_distance(v[2], plane) <= std::pow(sqrt_3*d->grid_cell_size, 2)) return false;
-        }
-        // dist from 3 to incident(4)
-        for(auto const& plane: incident_planes[4]) {
-            if( CGAL::squared_distance(v[3], plane) <= std::pow(sqrt_3*d->grid_cell_size, 2)) return false;
-        }
-        return true;
+    template<class LoadComputer, class A>
+    double get_load_imbalance(const std::vector<A>& elements, MPI_Comm neighborhood = MPI_COMM_WORLD){
+        LoadComputer lc;
+        double my_load = lc.compute_load(elements);
+        int N; MPI_Comm_size(neighborhood, &N);
+        auto all_loads = get_neighbors_load(my_load, neighborhood); //global load balancing with MPI_COMM_WORLD
+        auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / N;
+        return (*std::max_element(all_loads.cbegin(), all_loads.cend()) / avg_load) - 1;
     }
 
     template<class CartesianPointTransformer, class LoadComputer, class MoveMethod, class A>
@@ -774,43 +736,42 @@ struct Partition {
         std::vector<int> vertex_local_id_to_move = {0,1,2,3,4,5,6,7,8};
 
         MoveMethod move_method(vertex_local_id_to_move);
+        const auto original_mu = mu;
+        const int MAX_TRIAL=1;
+        unsigned int iteration = 0;
 
-        for(unsigned int iteration = 0; iteration < 8; iteration++){
+        while(iteration < 8) {
             auto x = iteration&1; auto y = (iteration&2)>>1; auto z = (iteration&4)>>2;
             int com = (((unsigned int) coord.x()+x) & 1)  +
                       (((unsigned int) coord.y()+y) & 1)*2+
                       (((unsigned int) coord.z()+z) & 1)*4;
-            auto new_vertices = vertices;
-            auto v   = vertices[com];
-            auto vid = vertices_id[com];
-            auto cls = get_neighbors_from_vertex_id<Point_3>(all_cl, vid);
-            auto f1  = get_vertex_force(v, cls, normalized_loads);
-            auto f1_after = constraint_force(d, v, f1);
 
-            new_vertices[com] = move_vertex(v, f1_after, mu);
-
-            int valid = lb_isGeometryValid(new_vertices, get_planes(new_vertices));
-            const auto& communicator = vertex_neighborhood[com];
-            std::vector<int> allValid(communicator.comm_size);
-            communicator.Allgather(&valid, 1, MPI_INT, allValid.data(), 1, MPI_INT);
-            int are_all_valid = std::accumulate(allValid.begin(), allValid.end(), 1, [](auto k, auto v){return k*v;});
-            if(are_all_valid){
-                vertices = new_vertices;
-                update();
+            for(int trial = 0; trial < MAX_TRIAL; ++trial) {
+                auto new_vertices = vertices;
+                auto v   = vertices[com];
+                auto vid = vertices_id[com];
+                auto cls = search_in_linear_hashmap<Point_3>(all_cl, vid);
+                auto f1  = get_vertex_force(v, cls, normalized_loads);
+                auto f1_after = constraint_force(d, v, f1);
+                new_vertices[com] = move_vertex(v, f1_after, mu);
+                int valid = lb_isGeometryValid(new_vertices, get_planes(new_vertices));
+                const auto& communicator = vertex_neighborhood[vid];
+                std::vector<int> allValid(communicator.comm_size);
+                communicator.Allgather(&valid, 1, MPI_INT, allValid.data(), 1, MPI_INT);
+                int are_all_valid = std::accumulate(allValid.begin(), allValid.end(), 1, [](auto k, auto v){return k*v;});
+                if(are_all_valid) {
+                    vertices = new_vertices;
+                    update();
+                    iteration++;
+                    mu = original_mu;
+                    break;
+                } else {
+                    mu /= 2.0;
+                    if(trial == MAX_TRIAL-1)
+                        iteration++;
+                }
             }
         }
-
-
-
-//        for(int i = 0; i < 8; ++i) {
-//            auto& v  = vertices[i];
-//            auto vid = vertices_id[i];
-//            auto cls = get_neighbors_from_vertex_id(all_cl, vid);
-//            auto f1 = get_vertex_force(v, cls, normalized_loads);
-//            auto f1_after = constraint_force(d, v, f1);
-//            v = move_vertex(v, f1_after, mu);
-//        }
-
 
     }
 
@@ -885,6 +846,7 @@ Vector_3 constraint_force(const Domain* d, const Point_3& p, const Vector_3& f){
     }
     return Vector_3(fx,fy,fz);
 }
+
 double compute_mu(const Domain* d, double max_normalized_load){
     double sigma_max = max_normalized_load-1;
     return sigma_max == 0 ? 0 : d->get_grid_cell_size()/(sigma_max);
@@ -955,8 +917,8 @@ struct Cell {
 
         int blockcount_element[3];
 
-        blockcount_element[0] = number_of_int_elements; // gid, lid, exit, waiting_time
-        blockcount_element[1] = number_of_float_elements; // position <x,y>
+        blockcount_element[0] = number_of_int_elements;    // gid, lid, exit, waiting_time
+        blockcount_element[1] = number_of_float_elements;  // position <x,y>
         blockcount_element[2] = number_of_double_elements; // position <x,y>
         //int
         MPI_Type_contiguous(number_of_int_elements, MPI_INT, &gid_type_datatype); // position
@@ -978,7 +940,7 @@ struct Cell {
         MPI_Type_create_struct(3, blockcount_element, offset, blocktypes, &cell_datatype);
         MPI_Type_commit(&cell_datatype);
 
-        return CommunicationDatatype(cell_datatype, gid_type_datatype);
+        return {cell_datatype, gid_type_datatype};
     }
 
     static void set_msx(int _msx){
@@ -1118,7 +1080,7 @@ int main() {
 
     std::random_device rd{};
     std::mt19937 gen{rd()};
-    std::normal_distribution<double> normal_distribution(1.0, 0.2);
+    std::normal_distribution<double> normal_distribution(1.0 + my_rank % 2, 0.2);
 
     auto bbox = CGAL::bbox_3(part.vertices.begin(), part.vertices.end());
     int cell_in_my_rows = (int) (bbox.xmax() - bbox.xmin()) / d.grid_cell_size;
@@ -1140,10 +1102,13 @@ int main() {
             }
         }
     }
+    //std::cout << "BEFORE: " << part.get_load_imbalance<GridElementComputer>(my_cells) << std::endl;
 
     part.move_vertices<GridPointTransformer, GridElementComputer, GlobalMoveMethod, Cell>(my_cells);
 
-    std::cout << part << std::endl;
+    //std::cout << "AFTER: " << part.get_load_imbalance<GridElementComputer>(my_cells) << std::endl;
+
+    std::cout << my_rank << " " << part << std::endl;
 
     MPI_Finalize();
 
