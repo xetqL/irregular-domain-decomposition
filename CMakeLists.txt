@@ -16,7 +16,7 @@ include(${CGAL_USE_FILE})
 
 include_directories(SYSTEM ${MPI_INCLUDE_PATH})
 
-add_executable(adlbirreg main.cpp Communicator.hpp)
+add_executable(adlbirreg main.cpp Communicator.hpp Partition.cpp Partition.hpp GeometricUtils.hpp Domain.cpp Domain.hpp Cell.cpp Cell.hpp Utils.hpp GeometricUtils.cpp Communicator.cpp)
 
 add_executable(test_communcation comm.cpp Communicator.hpp)
 

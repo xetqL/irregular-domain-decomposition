@@ -10,7 +10,15 @@
 #include <vector>
 #include <cmath>
 
-short get_type_size(MPI_Datatype type){
+#define get_MPI_rank(rank_var)\
+    int rank_var;\
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank_var)
+
+#define get_MPI_worldsize(worldsize_var)\
+    int worldsize_var;\
+    MPI_Comm_size(MPI_COMM_WORLD, &worldsize_var)
+
+inline short get_type_size(MPI_Datatype type) {
     if(type == MPI_INT)return sizeof(int);
     if(type == MPI_DOUBLE)return sizeof(double);
     if(type == MPI_FLOAT)return sizeof(float);
@@ -19,6 +27,13 @@ short get_type_size(MPI_Datatype type){
     if(type == MPI_LONG_LONG)return sizeof(long long);
     return -1;
 }
+
+struct CommunicationDatatype {
+    MPI_Datatype element_datatype;
+    MPI_Datatype minimal_datatype;
+    CommunicationDatatype(const MPI_Datatype &el, const MPI_Datatype &min) : element_datatype(el), minimal_datatype(min){}
+    void free_datatypes() { MPI_Type_free(&element_datatype); MPI_Type_free(&minimal_datatype);}
+};
 
 class Communicator {
     std::vector<int> comm_to_world;
@@ -121,6 +136,5 @@ public:
 
     const std::vector<int> get_ranks() const { return comm_to_world; }
 };
-
 
 #endif //ADLBIRREG_COMMUNICATOR_HPP
