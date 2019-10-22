@@ -339,34 +339,45 @@ struct Partition {
         }
 
         std::array<std::pair<int, std::vector<A>>, 26> all_neighbors;
-
+        int k = 0;
         for(int com = 0; com < 8; ++com) {
             auto vid = vertices_id[com];
             const auto &communicator = vertex_neighborhood[vid];
             //TODO: search in linear hashmap if it exists
+            for(int P : communicator.get_ranks()) {
+                if(search_in_linear_hashmap(all_neighbors, P) == all_neighbors.end()){
+                    all_neighbors[k] = std::make_pair(P, std::vector<A>());
+                    k++;
+                }
+            }
         }
 
         //TAG MY DATA
         const auto nb_elements = elements.size();
-        for(int i = 0; i < nb_elements; ++i){
-            auto point = transformer.transform(elements[i]);
+        size_t data_id = 0;
+        while(data_id < nb_elements){
+            auto point = transformer.transform(elements[data_id]);
             bool is_real_cell = is_inside(point);
             auto closest_planes = find_planes_closer_than(planes, point, sqrt_3*grid_size);
 
             if(closest_planes.size() > 0 && is_real_cell) { // IS A NEIGHBORING CELL
 
             } else if(!is_real_cell){ // CELL TO TRANSFER TO SOMEONE
-                for(int com = 0; com < 8; ++com){
+                for(auto& proc_data : all_neighbors){
                     auto neighborhood_domains = neighborhoods[com];
-                    auto vid = vertices_id[com];
-                    const auto& communicator = vertex_neighborhood[vid];
+                    //auto vid = vertices_id[com];
+                    //const auto& communicator = vertex_neighborhood[vid];
                     //to whom belongs this fucking point?
-                    for(int P = 0; P < communicator.comm_size; ++P) {
-                        if(neighborhood_domains.at(P).is_inside(point)) {
-
-                        }
+                    //for(int P = 0; P < communicator.comm_size; ++P) {
+                    if(neighborhood_domains.at(P).is_inside(point)) {
+                        search_in_linear_hashmap(all_neighbors, P)->second.push_back(elements[data_id]);
+                        //remove the shit
+                        std::iter_swap(elements.begin() + data_id, elements.end() - 1);
+                        elements.pop_back();
                     }
+                    //}
                 }
+                data_id++;
             }
 
         }
