@@ -9,12 +9,15 @@
 #include <vector>
 #include <array>
 #include <mpi.h>
-template<class A>
-std::vector<A>& search_in_linear_hashmap(std::array<std::pair<int, std::vector<A>>, 8>& linmap, int key) {
-    for(std::pair<int, std::vector<A>>& entry : linmap) {
-        if(entry.first == key) return entry.second;
+
+template<int N, class A>
+typename std::array<std::pair<int,  std::vector<A>>, N>::iterator
+search_in_linear_hashmap(const std::array<std::pair<int, std::vector<A>>, N>& linmap, int key) {
+    //for(std::pair<int, std::vector<A>>& entry : linmap) {
+    for(typename std::array<std::pair<int,  std::vector<A>>, N>::iterator entry = linmap.begin(); entry != linmap.end(); entry++){
+        if((*entry).first == key) return entry;
     }
-    throw std::runtime_error("doesn't exist");
+    return linmap.end();
 }
 
 /**

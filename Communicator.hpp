@@ -9,6 +9,7 @@
 #include <mpi.h>
 #include <vector>
 #include <cmath>
+#include <assert.h>
 
 #define get_MPI_rank(rank_var)\
     int rank_var;\
@@ -59,6 +60,7 @@ public:
         }
         comm_size = comm_to_world.size();
     };
+
 
     void Bcast_hypercube(void* buffer, int count, MPI_Datatype type, int root)  const {
         if(world_to_comm.find(world_rank) == world_to_comm.end()) {
@@ -134,7 +136,33 @@ public:
             }
     }
 
+    // Peer-to-peer communications are just wrapper around MPI directives
+    int Send(const void *buf, int count, MPI_Datatype datatype, int dest, int tag) const {
+        assert(std::find(comm_to_world.cbegin(), comm_to_world.cend(), dest) != comm_to_world.cend());
+        return MPI_Send(buf, count ,datatype, dest, tag, MPI_COMM_WORLD);
+    }
+
+    int Isend(const void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Request *request) const {
+        assert(std::find(comm_to_world.cbegin(), comm_to_world.cend(), dest) != comm_to_world.cend());
+        return MPI_Isend(buf, count ,datatype, dest, tag, MPI_COMM_WORLD, request);
+    }
+
+    int Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag) const {
+        assert(std::find(comm_to_world.cbegin(), comm_to_world.cend(), source) != comm_to_world.cend());
+        return MPI_Recv(buf, count, datatype, source, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
+
+    int Irecv(void *buf, int count, MPI_Datatype datatype, int source, int tag, MPI_Request *request) const {
+        assert(std::find(comm_to_world.cbegin(), comm_to_world.cend(), source) != comm_to_world.cend());
+        return MPI_Irecv(buf, count, datatype, source, tag, MPI_COMM_WORLD, request);
+    }
+
     const std::vector<int> get_ranks() const { return comm_to_world; }
+    const int translate_rank_to_local(int world_rank) const { return world_to_comm[world_rank];}
+    const int translate_rank_to_global(int local_rank) const { return comm_to_world[local_rank];}
+
+    //const std::vector<int> get_neighbors() const { return comm_to_world; }
+
 };
 
 #endif //ADLBIRREG_COMMUNICATOR_HPP

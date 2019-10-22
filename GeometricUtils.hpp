@@ -118,7 +118,7 @@ inline Vector_3 get_direction(const Point_3& vertex, const Point_3& center_of_lo
 
 Vector_3 get_vertex_force(const Point_3& vertex, const std::vector<Point_3>& centers_of_load, const std::vector<double>& normalized_loads);
 
-bool lb_isGeometryValid(const std::array<Point_3, 8>& vertices, const std::array<Plane_3, 12>& planes);
+bool lb_isGeometryValid(const std::array<Point_3, 8>& vertices, const std::array<Plane_3, 12>& planes, const double grid_size);
 
 template<class InputIterator>
 std::vector<Point_3> get_points(InputIterator beg, InputIterator end){

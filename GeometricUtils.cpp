@@ -107,7 +107,8 @@ Vector_3 get_vertex_force(const Point_3& vertex, const std::vector<Point_3>& cen
     }
     return f;
 }
-bool lb_isGeometryValid(const std::array<Point_3, 8>& vertices, const std::array<Plane_3, 12>& planes){
+
+bool lb_isGeometryValid(const std::array<Point_3, 8>& vertices, const std::array<Plane_3, 12>& planes, const double grid_size){
     /* In comparision to the set of rules in the plimpton scheme, these values are less strict
          * Except for the tetrahedron volumes, the checks are not necessary, but prevent the domain
          * from degenerating to severely, which can cause problems in the convergence behavior.
@@ -163,7 +164,7 @@ bool lb_isGeometryValid(const std::array<Point_3, 8>& vertices, const std::array
         std::copy_if(planes.begin(), planes.end(), incident_planes[i].begin(), [&vertex](auto plane){return plane.has_on(vertex);});
     }
 
-    for(int i = 0; i < 4; ++i){
+    for(int i = 0; i < 7; ++i){
         // dist from i to incident(7-i)
         for(auto const& plane: incident_planes[7-i]) {
             if( CGAL::squared_distance(vertices[i], plane) <= std::pow(sqrt_3*grid_size, 2)) return false;
