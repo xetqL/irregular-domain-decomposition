@@ -16,15 +16,18 @@ namespace lb{
 double compute_mu(double grid_size, double max_normalized_load);
 int get_rank_from_vertices(const std::array<int, 4>& vertices_id, const std::map<int, Communicator>& neighborhoods);
 
-struct Partition {
+class Partition {
+public:
     const Box3 d;
     double grid_size;
     Point_3 coord;
 
+    std::set<int> neighbor_list;
     std::array<Point_3, 8>       vertices;
     std::array<int, 8>           vertices_id;
     std::array<Tetrahedron_3, 6> tetrahedra;
     std::map<int, Communicator>  vertex_neighborhood;
+
     std::array<Plane_3, 12> planes;
 
     Partition(Point_3 coord, const Box3& domain, double grid_size,
@@ -292,64 +295,24 @@ struct Partition {
         // create neighbors domain
         const auto my_domain = this->serialize();
 
-        std::array<std::vector<double>, 8> recv_buff;
-        std::array<std::vector<MPI_Request>, 8> srequests, rrequests;
-
-        for(int iteration = 0; iteration < 8; iteration++) {
-            auto x = iteration & 1;
-            auto y = (iteration & 2) >> 1;
-            auto z = (iteration & 4) >> 2;
-            int com = (((unsigned int) coord.x() + x) & 1) +
-                      (((unsigned int) coord.y() + y) & 1) * 2 +
-                      (((unsigned int) coord.z() + z) & 1) * 4;
-            auto vid = vertices_id[com];
-            const auto& communicator = vertex_neighborhood[vid];
-            recv_buff[com].resize(communicator.comm_size * 24);
-            srequests[com].resize(communicator.comm_size * 24);
-            rrequests[com].resize(communicator.comm_size * 24);
-
-            auto ranks = communicator.get_ranks();
-
-            for (int i = 0; i < communicator.comm_size; ++i) {
-                communicator.Isend(my_domain.data(), 24, MPI_DOUBLE, ranks[i], 9999, &srequests[com][i]);
-            }
-
-            for (int i = 0; i < communicator.comm_size; ++i) {
-                communicator.Irecv((recv_buff[iteration].data() + i * 24), 24, MPI_DOUBLE, ranks[i], 9999, &rrequests[com][i]);
-            }
-        }
-        std::array<std::vector<Partition>, 8> neighborhoods;
-        for(int iteration = 0; iteration < 8; iteration++) {
-
-            auto x = iteration & 1;
-            auto y = (iteration & 2) >> 1;
-            auto z = (iteration & 4) >> 2;
-            int com = (((unsigned int) coord.x() + x) & 1) +
-                      (((unsigned int) coord.y() + y) & 1) * 2 +
-                      (((unsigned int) coord.z() + z) & 1) * 4;
-            auto vid = vertices_id[com];
-            const auto &communicator = vertex_neighborhood[vid];
-
-            MPI_Waitall(communicator.comm_size, rrequests[com].data(), MPI_STATUSES_IGNORE);
-
-            // building neighborhood of vertex
-            for (int i = 0; i < communicator.comm_size; ++i) {
-                neighborhoods[com].emplace_back(coord, d, grid_size, (recv_buff[com].begin() + i * 24));
-            }
-        }
-
         std::array<std::pair<int, std::vector<A>>, 26> all_neighbors;
-        int k = 0;
-        for(int com = 0; com < 8; ++com) {
-            auto vid = vertices_id[com];
-            const auto &communicator = vertex_neighborhood[vid];
-            //TODO: search in linear hashmap if it exists
-            for(int P : communicator.get_ranks()) {
-                if(search_in_linear_hashmap(all_neighbors, P) == all_neighbors.end()){
-                    all_neighbors[k] = std::make_pair(P, std::vector<A>());
-                    k++;
-                }
-            }
+        std::transform(neighbor_list.begin(), neighbor_list.end(), all_neighbors.begin(),
+                [](int i){ return std::make_pair(i, std::vector<A>()); });
+
+        std::vector<double> recv_buff(26*8*3);
+        std::vector<MPI_Request> srequests(26), rrequests(26);
+
+        for(int i = 0; i < 26; ++i) {
+            int neighbor_rank = all_neighbors[i].first;
+            MPI_Isend(my_domain.data(), 24, MPI_DOUBLE, neighbor_rank, 9999, MPI_COMM_WORLD, &srequests[i]);
+            MPI_Irecv((recv_buff.data() + i * 24), 24, MPI_DOUBLE, neighbor_rank, 9999, MPI_COMM_WORLD, &rrequests[i]);
+        }
+        MPI_Waitall(26, rrequests.data(), MPI_STATUSES_IGNORE);
+
+        std::vector<Partition> neighborhoods;
+        for(int i = 0; i < 26; ++i) {
+            // building neighborhood of vertex
+            neighborhoods.emplace_back(coord, d, grid_size, (recv_buff.begin() + i * 24));
         }
 
         //TAG MY DATA
@@ -363,7 +326,7 @@ struct Partition {
             if(closest_planes.size() > 0 && is_real_cell) { // IS A NEIGHBORING CELL
 
             } else if(!is_real_cell){ // CELL TO TRANSFER TO SOMEONE
-                for(auto& proc_data : all_neighbors){
+                for(auto& proc_data : all_neighbors) {
                     auto neighborhood_domains = neighborhoods[com];
                     //auto vid = vertices_id[com];
                     //const auto& communicator = vertex_neighborhood[vid];
@@ -402,19 +365,23 @@ struct Partition {
         std::sort(sbuff.begin(), sbuff.end());
 
         MPI_Allgather(sbuff.data(), 8, MPI_INT, buff.data(), 8, MPI_INT, MPI_COMM_WORLD);
-
         for(int j = 0; j < 8; ++j) {
             int vid = vertices_id[j];
             for(int i = 0; i < N; ++i) {
                 auto beg = buff.begin() +  i * 8;
                 auto end = buff.begin() + (i+1) * 8;
-                if(std::binary_search(beg, end, vid)) neighbors[vid].insert(i);
+                if(std::binary_search(beg, end, vid)) {
+                    neighbors[vid].insert(i);
+                     neighbor_list.insert(i);
+                }
             }
             neighbors[vid].insert(my_rank);
             std::vector<int> n_list(neighbors[vid].begin(), neighbors[vid].end());
             Communicator c(n_list);
             vertex_neighborhood[vid] = c;
         }
+
+
     }
 
     friend std::ostream &operator<<(std::ostream &os, const Partition &partition) {
