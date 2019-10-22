@@ -158,7 +158,7 @@ public:
     }
 
     const std::vector<int> get_ranks() const { return comm_to_world; }
-    const int translate_rank_to_local(int world_rank) const { return world_to_comm[world_rank];}
+    const int translate_rank_to_local(int world_rank) const { return world_to_comm.at(world_rank);}
     const int translate_rank_to_global(int local_rank) const { return comm_to_world[local_rank];}
 
     //const std::vector<int> get_neighbors() const { return comm_to_world; }

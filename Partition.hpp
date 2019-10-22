@@ -334,7 +334,7 @@ struct Partition {
 
             // building neighborhood of vertex
             for (int i = 0; i < communicator.comm_size; ++i) {
-                neighborhoods[com].emplace_back(coord, d, grid_size, (recv_buff.begin() + i * 24));
+                neighborhoods[com].emplace_back(coord, d, grid_size, (recv_buff[com].begin() + i * 24));
             }
         }
 
