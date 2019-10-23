@@ -18,6 +18,12 @@ int get_rank_from_vertices(const std::array<int, 4>& vertices_id, const std::map
 
 class Partition {
 public:
+
+    using DataIndex = int;
+    using ProcRank = int;
+    using VertIndex = int;
+
+
     const Box3 d;
     double grid_size;
     Point_3 coord;
@@ -27,7 +33,6 @@ public:
     std::array<int, 8>           vertices_id;
     std::array<Tetrahedron_3, 6> tetrahedra;
     std::map<int, Communicator>  vertex_neighborhood;
-
     std::array<Plane_3, 12> planes;
 
     Partition(Point_3 coord, const Box3& domain, double grid_size,
@@ -212,7 +217,8 @@ public:
     }
 
     template<class CartesianPointTransformer, class LoadComputer, class A>
-    void move_vertices(std::vector<A>& elements, MPI_Comm neighborhood = MPI_COMM_WORLD) {
+    std::array<std::pair<ProcRank, std::vector<DataIndex>>, 26> move_vertices(std::vector<A>& elements, MPI_Comm neighborhood = MPI_COMM_WORLD) {
+
         LoadComputer lc;
         CartesianPointTransformer transformer;
         std::vector<Point_3> points;
@@ -241,8 +247,8 @@ public:
 
         auto center_of_load = get_center_of_load(weights, points);
 
-        std::array<std::pair<int, std::vector<Point_3>>, 8> all_cl = spread_centers_of_load(center_of_load, vertex_neighborhood);
-        std::vector<int> vertex_local_id_to_move = {0,1,2,3,4,5,6,7,8};
+        std::array<std::pair<VertIndex, std::vector<Point_3>>, 8> all_cl = spread_centers_of_load(center_of_load, vertex_neighborhood);
+        std::vector<int> vertex_local_id_to_move = {0, 1, 2, 3, 4, 5, 6, 7, 8};
 
         const auto original_mu = mu;
         const int MAX_TRIAL    = 1;
@@ -295,19 +301,22 @@ public:
         // create neighbors domain
         const auto my_domain = this->serialize();
 
-        std::array<std::pair<int, std::vector<A>>, 26> all_neighbors;
-        std::transform(neighbor_list.begin(), neighbor_list.end(), all_neighbors.begin(),
-                [](int i){ return std::make_pair(i, std::vector<A>()); });
+        std::array<std::pair<ProcRank, std::vector<A>>, 26>  all_neighbors;
+        std::array<std::pair<ProcRank, std::vector<DataIndex>>, 26> neighbor_ghosts;
 
+        std::fill(all_neighbors.begin(), all_neighbors.end(), std::make_pair(-1, std::vector<A>()));
+        std::transform(neighbor_list.begin(), neighbor_list.end(), all_neighbors.begin(),
+                [](ProcRank i){ return std::make_pair(i, std::vector<A>()); });
         std::vector<double> recv_buff(26*8*3);
         std::vector<MPI_Request> srequests(26), rrequests(26);
 
         for(int i = 0; i < 26; ++i) {
-            int neighbor_rank = all_neighbors[i].first;
+            ProcRank neighbor_rank = all_neighbors[i].first;
             MPI_Isend(my_domain.data(), 24, MPI_DOUBLE, neighbor_rank, 9999, MPI_COMM_WORLD, &srequests[i]);
             MPI_Irecv((recv_buff.data() + i * 24), 24, MPI_DOUBLE, neighbor_rank, 9999, MPI_COMM_WORLD, &rrequests[i]);
         }
         MPI_Waitall(26, rrequests.data(), MPI_STATUSES_IGNORE);
+        MPI_Waitall(26, srequests.data(), MPI_STATUSES_IGNORE);
 
         std::vector<Partition> neighborhoods;
         for(int i = 0; i < 26; ++i) {
@@ -318,31 +327,42 @@ public:
         //TAG MY DATA
         const auto nb_elements = elements.size();
         size_t data_id = 0;
-        while(data_id < nb_elements){
+        while(data_id < nb_elements) {
             auto point = transformer.transform(elements[data_id]);
             bool is_real_cell = is_inside(point);
             auto closest_planes = find_planes_closer_than(planes, point, sqrt_3*grid_size);
+            if(closest_planes.size() > 0 && is_real_cell) { // IS A NEIGHBORING CELL, i will move it to them proc that share the closest planes
+                //detect to whom I will periodically share my states
+                for(int nid = 0; nid < 26; ++nid) {
+                    if(all_neighbors[nid].first < 0) break;
+                    const auto& neighborhood_domains = neighborhoods[nid];
+                    bool found = false;
+                    for(const Plane_3& close_plane : closest_planes){
+                         found = std::any_of(neighborhood_domains.planes.cbegin(), neighborhood_domains.planes.cend(),
+                                 [&close_plane](const Plane_3& p){return p == close_plane;});
+                         if(found) break;
+                    }
+                    if(found) {
+                        //add to ghost data for this proc
 
-            if(closest_planes.size() > 0 && is_real_cell) { // IS A NEIGHBORING CELL
-
-            } else if(!is_real_cell){ // CELL TO TRANSFER TO SOMEONE
-                for(auto& proc_data : all_neighbors) {
-                    auto neighborhood_domains = neighborhoods[com];
-                    //auto vid = vertices_id[com];
-                    //const auto& communicator = vertex_neighborhood[vid];
-                    //to whom belongs this fucking point?
-                    //for(int P = 0; P < communicator.comm_size; ++P) {
-                    if(neighborhood_domains.at(P).is_inside(point)) {
-                        search_in_linear_hashmap(all_neighbors, P)->second.push_back(elements[data_id]);
-                        //remove the shit
+                    }
+                }
+            } else if(!is_real_cell){ // transfer data to neighbor
+                for(int nid = 0; nid < 26; ++nid) {
+                    if(all_neighbors[nid].first < 0) break;
+                    const auto& neighborhood_domains = neighborhoods[nid];
+                    const auto neighbor_rank  = all_neighbors[nid].first;
+                    auto& neighbor_data = all_neighbors[nid].second;
+                    if(neighborhood_domains.is_inside(point)) {
+                        neighbor_data.push_back(elements[data_id]);
                         std::iter_swap(elements.begin() + data_id, elements.end() - 1);
                         elements.pop_back();
                     }
-                    //}
                 }
-                data_id++;
+            } else {
+                // those are my data
             }
-
+            data_id++;
         }
 
     }
