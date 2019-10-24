@@ -41,7 +41,10 @@ inline void linear_to_grid(const A index, const A c, const A r, int& x_idx, int&
 };
 
 template<class NumericalType>
-inline int position_to_cell(Point_3 const& position, const double step, const NumericalType column, const NumericalType row) {
+inline int position_to_cell(Point_3 const& position, const double step, const NumericalType column, const NumericalType row,
+        const NumericalType col_shift  = 0.0,
+        const NumericalType row_shift  = 0.0,
+        const NumericalType depth_shift= 0.0) {
     const std::vector<NumericalType> weight = {1, column, column*row};
     NumericalType idx = 0;
 

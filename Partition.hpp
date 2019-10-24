@@ -106,7 +106,7 @@ public:
         return (vertices[1].x()-vertices[0].x()) * (vertices[4].y()-vertices[0].y()) * (vertices[2].z()-vertices[0].z());
     }
 
-    bool is_inside(const Point_3& p) {
+    bool is_inside(const Point_3& p) const {
         return in_tetrahedron(tetrahedra[0], p) || in_tetrahedron(tetrahedra[1], p) || in_tetrahedron(tetrahedra[2], p) || in_tetrahedron(tetrahedra[3], p) || in_tetrahedron(tetrahedra[4], p) || in_tetrahedron(tetrahedra[5], p);
     }
 
@@ -217,8 +217,8 @@ public:
     }
 
     template<class CartesianPointTransformer, class LoadComputer, class A>
-    std::array<std::pair<ProcRank, std::vector<DataIndex>>, 26> move_vertices(std::vector<A>& elements, MPI_Comm neighborhood = MPI_COMM_WORLD) {
-
+    std::vector<std::pair<ProcRank, std::vector<DataIndex>>> move_vertices(std::vector<A>& elements, MPI_Datatype datatype, MPI_Comm neighborhood = MPI_COMM_WORLD) {
+        get_MPI_rank(my_rank);
         LoadComputer lc;
         CartesianPointTransformer transformer;
         std::vector<Point_3> points;
@@ -256,6 +256,7 @@ public:
 
         // move the vertices, keep valid geometry among neighbors of a given vertex
         while(iteration < 8) {
+
             auto x = iteration&1; auto y = (iteration&2)>>1; auto z = (iteration&4)>>2;
             int com = (((unsigned int) coord.x()+x) & 1)  +
                       (((unsigned int) coord.y()+y) & 1)*2+
@@ -283,10 +284,12 @@ public:
                 } else {
                     mu /= 2.0;
                     if(trial == MAX_TRIAL-1) iteration++;
+                    else trial++;
                 }
             }
 
         }
+
         //*******************************************************
         // at this point we are sure that:
         // 1) Vertices have moved
@@ -300,31 +303,38 @@ public:
         // after moving all the vertices, move the data
         // create neighbors domain
         const auto my_domain = this->serialize();
+        int number_of_neighbors = neighbor_list.size();
 
-        std::array<std::pair<ProcRank, std::vector<A>>, 26>  all_neighbors;
-        std::array<std::pair<ProcRank, std::vector<DataIndex>>, 26> neighbor_ghosts;
+        std::vector<std::pair<ProcRank, std::vector<A>>>  migration_and_destination(number_of_neighbors);
+        std::vector<std::pair<ProcRank, std::vector<DataIndex>>> neighbor_ghosts(number_of_neighbors);
 
-        std::fill(all_neighbors.begin(), all_neighbors.end(), std::make_pair(-1, std::vector<A>()));
-        std::transform(neighbor_list.begin(), neighbor_list.end(), all_neighbors.begin(),
+        std::transform(neighbor_list.begin(), neighbor_list.end(), migration_and_destination.begin(),
                 [](ProcRank i){ return std::make_pair(i, std::vector<A>()); });
-        std::vector<double> recv_buff(26*8*3);
-        std::vector<MPI_Request> srequests(26), rrequests(26);
+        std::transform(neighbor_list.begin(), neighbor_list.end(), neighbor_ghosts.begin(),
+                       [](ProcRank i){ return std::make_pair(i, std::vector<DataIndex>()); });
 
-        for(int i = 0; i < 26; ++i) {
-            ProcRank neighbor_rank = all_neighbors[i].first;
-            MPI_Isend(my_domain.data(), 24, MPI_DOUBLE, neighbor_rank, 9999, MPI_COMM_WORLD, &srequests[i]);
-            MPI_Irecv((recv_buff.data() + i * 24), 24, MPI_DOUBLE, neighbor_rank, 9999, MPI_COMM_WORLD, &rrequests[i]);
+        std::vector<double> recv_buff(neighbor_list.size()*8*3);
+        std::vector<MPI_Request> srequests(neighbor_list.size()), rrequests(neighbor_list.size());
+
+        {
+            int i = 0;
+            for(ProcRank neighbor_rank : neighbor_list) {
+                MPI_Isend(my_domain.data(), 24, MPI_DOUBLE, neighbor_rank, 9999, MPI_COMM_WORLD, &srequests[i]);
+                MPI_Irecv((recv_buff.data() + i * 24), 24, MPI_DOUBLE, neighbor_rank, 9999, MPI_COMM_WORLD, &rrequests[i]);
+                i++;
+            }
         }
-        MPI_Waitall(26, rrequests.data(), MPI_STATUSES_IGNORE);
-        MPI_Waitall(26, srequests.data(), MPI_STATUSES_IGNORE);
+        MPI_Waitall(neighbor_list.size(), rrequests.data(), MPI_STATUSES_IGNORE);
+        MPI_Waitall(neighbor_list.size(), srequests.data(), MPI_STATUSES_IGNORE);
 
         std::vector<Partition> neighborhoods;
-        for(int i = 0; i < 26; ++i) {
+        for(int i = 0; i < number_of_neighbors; ++i) {
             // building neighborhood of vertex
             neighborhoods.emplace_back(coord, d, grid_size, (recv_buff.begin() + i * 24));
         }
 
         //TAG MY DATA
+
         const auto nb_elements = elements.size();
         size_t data_id = 0;
         while(data_id < nb_elements) {
@@ -332,9 +342,7 @@ public:
             bool is_real_cell = is_inside(point);
             auto closest_planes = find_planes_closer_than(planes, point, sqrt_3*grid_size);
             if(closest_planes.size() > 0 && is_real_cell) { // IS A NEIGHBORING CELL, i will move it to them proc that share the closest planes
-                //detect to whom I will periodically share my states
-                for(int nid = 0; nid < 26; ++nid) {
-                    if(all_neighbors[nid].first < 0) break;
+                for(int nid = 0; nid < number_of_neighbors; ++nid) {
                     const auto& neighborhood_domains = neighborhoods[nid];
                     bool found = false;
                     for(const Plane_3& close_plane : closest_planes){
@@ -342,19 +350,17 @@ public:
                                  [&close_plane](const Plane_3& p){return p == close_plane;});
                          if(found) break;
                     }
-                    if(found) {
-                        //add to ghost data for this proc
-
+                    if(found) { //add to ghost data for this proc
+                        neighbor_ghosts[nid].second.push_back(data_id);
                     }
                 }
             } else if(!is_real_cell){ // transfer data to neighbor
-                for(int nid = 0; nid < 26; ++nid) {
-                    if(all_neighbors[nid].first < 0) break;
+                for(int nid = 0; nid < number_of_neighbors; ++nid) {
+                    if(migration_and_destination[nid].first < 0) break;
                     const auto& neighborhood_domains = neighborhoods[nid];
-                    const auto neighbor_rank  = all_neighbors[nid].first;
-                    auto& neighbor_data = all_neighbors[nid].second;
+                    const auto neighbor_rank  = migration_and_destination[nid].first;
                     if(neighborhood_domains.is_inside(point)) {
-                        neighbor_data.push_back(elements[data_id]);
+                        migration_and_destination[nid].second.push_back(elements[data_id]);
                         std::iter_swap(elements.begin() + data_id, elements.end() - 1);
                         elements.pop_back();
                     }
@@ -365,6 +371,30 @@ public:
             data_id++;
         }
 
+        {
+            std::vector<MPI_Request> srequests(number_of_neighbors);
+            //migrate the data
+            for(int nid = 0; nid < number_of_neighbors; ++nid) {
+                int dest_rank = migration_and_destination[nid].first;
+                auto& buf     = migration_and_destination[nid].second;
+                MPI_Isend(buf.data(), buf.size(), datatype, dest_rank, 101010, MPI_COMM_WORLD, &srequests[nid]);
+            }
+            std::vector<A> buf;
+            for(int nid = 0; nid < number_of_neighbors; ++nid) {
+                int dest_rank = migration_and_destination[nid].first;
+                MPI_Status status;
+                MPI_Probe(dest_rank, 101010, MPI_COMM_WORLD, &status);
+                int count;
+                MPI_Get_count(&status, datatype, &count);
+                buf.resize(count);
+                MPI_Recv(buf.data(), count, datatype, dest_rank, 101010, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                std::move(buf.begin(), buf.end(), std::back_inserter(elements));
+            }
+            MPI_Waitall(number_of_neighbors, srequests.data(), MPI_STATUSES_IGNORE);
+        }
+
+        //return the ghosts
+        return neighbor_ghosts;
     }
 
     template<class NumericalType>

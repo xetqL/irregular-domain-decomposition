@@ -78,7 +78,7 @@ int main() {
     Cell::get_msy() = DOMAIN_SIZE_Y / d.grid_cell_size;
     Cell::get_msz() = DOMAIN_SIZE_Z / d.grid_cell_size;
     Cell::get_cell_size() = d.grid_cell_size;
-
+    auto datatype_wrapper = Cell::register_datatype();
     d.bootstrap_partitions(world_size);
 
     auto part = d.get_my_partition(my_rank);
@@ -99,25 +99,28 @@ int main() {
 
     int x_proc_idx, y_proc_idx, z_proc_idx; lb::linear_to_grid(my_rank, procs_x, procs_y, x_proc_idx, y_proc_idx, z_proc_idx);
 
-    const int xcells = nb_cells_x * procs_x, ycells = nb_cells_y * procs_y, zcells = nb_cells_z * procs_z;
+    const int total_cells_x = nb_cells_x * procs_x, total_cells_y = nb_cells_y * procs_y, total_cells_z = nb_cells_z * procs_z;
+    auto x_shift = (nb_cells_x * x_proc_idx);
+    auto y_shift = (nb_cells_y * y_proc_idx);
+    auto z_shift = (nb_cells_z * z_proc_idx);
+    for(int x = 0; x < nb_cells_x; ++x) {
+        for(int y = 0; y < nb_cells_y; ++y) {
+            for(int z = 0; z < nb_cells_z; ++z) {
 
-    for(int j = 0; j < nb_cells_x; ++j) {
-        for(int i = 0; i < nb_cells_y; ++i) {
-            for(int k = 0; k < nb_cells_z; ++k) {
-                int gid = procs_x * x_proc_idx + i + xcells * (j + (y_proc_idx * procs_y)) +
-                        ((z_proc_idx * procs_z) + k) * xcells * ycells;
+                int gid = x_shift + x + (y_shift + y) * total_cells_x + (z_shift + z) * total_cells_x * total_cells_y;
+
                 my_cells.emplace_back(gid, 0, normal_distribution(gen), 0.0);
             }
         }
     }
     //std::cout << "BEFORE: " << part.get_load_imbalance<GridElementComputer>(my_cells) << std::endl;
 
-    part.move_vertices<lb::GridPointTransformer, lb::GridElementComputer, Cell>(my_cells);
+    auto data = part.move_vertices<lb::GridPointTransformer, lb::GridElementComputer, Cell>(my_cells, datatype_wrapper.element_datatype);
 
     //std::cout << "AFTER: " << part.get_load_imbalance<GridElementComputer>(my_cells) << std::endl;
 
-    std::cout << my_rank << " " << part << std::endl;
-
+    std::cout << my_rank << " " << part << "  " <<  std::endl;
+    std::for_each(part.neighbor_list.cbegin(), part.neighbor_list.cend(), [&](auto val){std::cout << my_rank << " has " << val << std::endl;});
     MPI_Finalize();
 
     return 0;
