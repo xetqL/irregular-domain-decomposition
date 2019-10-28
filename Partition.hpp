@@ -23,7 +23,6 @@ public:
     using ProcRank = int;
     using VertIndex = int;
 
-
     const Box3 d;
     double grid_size;
     Point_3 coord;
@@ -43,7 +42,10 @@ public:
                         std::move(v5), std::move(v6), std::move(v7), std::move(v8)}){
         get_MPI_worldsize(num_part);
         for(int j = 0; j < 8; ++j)
+        {
             vertices_id[j] = get_vertex_id<int>(vertices[j], num_part);
+            //std::cout <<vertices_id[j] << std::endl;
+        }
         update();
     }
 
@@ -102,14 +104,9 @@ public:
         planes =  get_planes(vertices);
     }
 
-    double get_volume() {
-        return (vertices[1].x()-vertices[0].x()) * (vertices[4].y()-vertices[0].y()) * (vertices[2].z()-vertices[0].z());
-    }
-
-    bool is_inside(const Point_3& p) const {
+    bool contains(const Point_3& p) const {
         return in_tetrahedron(tetrahedra[0], p) || in_tetrahedron(tetrahedra[1], p) || in_tetrahedron(tetrahedra[2], p) || in_tetrahedron(tetrahedra[3], p) || in_tetrahedron(tetrahedra[4], p) || in_tetrahedron(tetrahedra[5], p);
     }
-
     template<class CartesianPointTransformer, class A>
     bool is_ghost(const CartesianPointTransformer& c, const A& p) {
         return is_ghost(c.transform(p));
@@ -146,7 +143,7 @@ public:
                 ghosts.push_back(std::make_pair(closest_planes, i));
             }
 
-            if(this->is_inside(c.transform(e))) {
+            if(this->contains(c.transform(e))) {
 
             } else {
 
@@ -186,7 +183,7 @@ public:
         std::array<std::pair<int, std::vector<double>>,  8> buff_all_cl;
         std::array<MPI_Request, 8> requests;
 
-        std::array<double, 3> my_cl = {cl.x(), cl.y(), cl.z()};
+        std::array<double, 3> my_cl{cl.x(), cl.y(), cl.z()};
         int idx = 0;
         for(auto&  comm : neighborhood) {
             int i = comm.first;
@@ -197,23 +194,31 @@ public:
             auto& curr_all_cl      = (*search_in_linear_hashmap<8>(all_cl, i)).second;
             curr_buff_all_cl.resize(3*N);
             curr_all_cl.resize(N);
-            comm.second.Allgather(my_cl.data(), 3, MPI_DOUBLE, curr_buff_all_cl.data(), 3, MPI_DOUBLE);
-            for(int j = 0; j < N; ++j) {// reconstruct the points
+            comm.second.Allgather(my_cl.data(), 3, MPI_DOUBLE, curr_buff_all_cl.data(), 3, MPI_DOUBLE, i);
+            for(int j = 0; j < N; ++j) { // reconstruct the points
                 curr_all_cl[j] = Point_3(curr_buff_all_cl[j*3],curr_buff_all_cl[j*3+1],curr_buff_all_cl[j*3+2]);
             }
             idx++;
         }
         return all_cl;
     }
+    using ElementCount   = int;
+    using Load           = double;
+    using Imbalance      = double;
+    using LoadStatistics = std::tuple<ElementCount, Load, Load, Imbalance, Imbalance>;
 
     template<class LoadComputer, class A>
-    double get_load_imbalance(const std::vector<A>& elements, MPI_Comm neighborhood = MPI_COMM_WORLD){
+    LoadStatistics get_load_statistics(const std::vector<A>& elements, MPI_Comm neighborhood = MPI_COMM_WORLD){
         LoadComputer lc;
+        int count = elements.size();
+        int buf;
         double my_load = lc.compute_load(elements);
         int N; MPI_Comm_size(neighborhood, &N);
         auto all_loads = get_neighbors_load(my_load, neighborhood); //global load balancing with MPI_COMM_WORLD
         auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / N;
-        return (*std::max_element(all_loads.cbegin(), all_loads.cend()) / avg_load) - 1;
+        auto max_load  =*std::max_element(all_loads.cbegin(), all_loads.cend());
+        MPI_Allreduce(&count, &buf, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+        return {buf, max_load, avg_load, (max_load / avg_load) - 1.0, (my_load / avg_load) - 1.0, };
     }
 
     template<class CartesianPointTransformer, class LoadComputer, class A>
@@ -239,54 +244,53 @@ public:
 
         std::transform(all_loads.cbegin(), all_loads.cend(), std::back_inserter(normalized_loads), [&avg_load](auto n){return n/avg_load;});
 
-        auto max_normalized_load = *std::max_element(normalized_loads.cbegin(), normalized_loads.cend());
+        //auto max_normalized_load = *std::max_element(normalized_loads.cbegin(), normalized_loads.cend());
 
-        double mu = compute_mu(grid_size, max_normalized_load);
+        double mu = 0;//compute_mu(grid_size, max_normalized_load);
 
         std::transform(all_loads.cbegin(), all_loads.cend(), std::back_inserter(normalized_loads), [&avg_load](auto v){return v / avg_load;});
 
         auto center_of_load = get_center_of_load(weights, points);
 
         std::array<std::pair<VertIndex, std::vector<Point_3>>, 8> all_cl = spread_centers_of_load(center_of_load, vertex_neighborhood);
+
         std::vector<int> vertex_local_id_to_move = {0, 1, 2, 3, 4, 5, 6, 7, 8};
 
         const auto original_mu = mu;
-        const int MAX_TRIAL    = 1;
+        const int MAX_TRIAL    = 3;
         unsigned int iteration = 0;
-
         // move the vertices, keep valid geometry among neighbors of a given vertex
         while(iteration < 8) {
-
             auto x = iteration&1; auto y = (iteration&2)>>1; auto z = (iteration&4)>>2;
             int com = (((unsigned int) coord.x()+x) & 1)  +
                       (((unsigned int) coord.y()+y) & 1)*2+
                       (((unsigned int) coord.z()+z) & 1)*4;
 
-            for(int trial = 0; trial < MAX_TRIAL; ++trial) {
-                auto new_vertices = vertices;
-                auto v   = vertices[com];
-                auto vid = vertices_id[com];
-                auto cls = (*search_in_linear_hashmap<8, Point_3>(all_cl, vid)).second;
-                auto f1  = get_vertex_force(v, cls, normalized_loads);
-                auto f1_after = constraint_force(d, v, f1);
-                new_vertices[com] = move_vertex(v, f1_after, mu);
-                int valid = lb_isGeometryValid(new_vertices, get_planes(new_vertices), grid_size);
-                const auto& communicator = vertex_neighborhood[vid];
-                std::vector<int> allValid(communicator.comm_size);
-                communicator.Allgather(&valid, 1, MPI_INT, allValid.data(), 1, MPI_INT);
-                int are_all_valid = std::accumulate(allValid.begin(),allValid.end(),1,[](auto k,auto v){return k*v;});
-                if(are_all_valid) {
-                    vertices = new_vertices;
-                    update();
-                    iteration++;
-                    mu = original_mu;
-                    break;
-                } else {
-                    mu /= 2.0;
-                    if(trial == MAX_TRIAL-1) iteration++;
-                    else trial++;
+            //if(communicator.comm_size > 1)
+                for(int trial = 0; trial < MAX_TRIAL; ++trial) {
+                    auto new_vertices = vertices;
+                    auto v   = vertices[com];
+                    auto vid = vertices_id[com];
+                    const auto& communicator = vertex_neighborhood[vid];
+                    auto cls = (*search_in_linear_hashmap<8, Point_3>(all_cl, vid)).second;
+                    auto f1  = get_vertex_force(v, cls, normalized_loads);
+                    auto f1_after = constraint_force(d, v, f1);
+                    new_vertices[com] = move_vertex(v, f1_after, mu);
+                    int valid = lb_isGeometryValid(new_vertices, get_planes(new_vertices), grid_size);
+                    std::vector<int> allValid(communicator.comm_size);
+                    communicator.Allgather(&valid, 1, MPI_INT, allValid.data(), 1, MPI_INT, vid);
+
+                    int are_all_valid = std::accumulate(allValid.begin(),allValid.end(),1,[](auto k,auto v){return k*v;});
+                    if(are_all_valid) {
+                        vertices = new_vertices;
+                        update();
+                        break;
+                    } else {
+                        mu /= 2.0;
+                    }
                 }
-            }
+            iteration++;
+            mu = original_mu;
 
         }
 
@@ -334,12 +338,15 @@ public:
         }
 
         //TAG MY DATA
-
+        int DBG_RANK = 7;
         const auto nb_elements = elements.size();
         size_t data_id = 0;
+        size_t nb_migrate = 0;
+        double sent_load = 0;
         while(data_id < nb_elements) {
             auto point = transformer.transform(elements[data_id]);
-            bool is_real_cell = is_inside(point);
+            bool is_real_cell = this->contains(point);
+
             auto closest_planes = find_planes_closer_than(planes, point, sqrt_3*grid_size);
             if(closest_planes.size() > 0 && is_real_cell) { // IS A NEIGHBORING CELL, i will move it to them proc that share the closest planes
                 for(int nid = 0; nid < number_of_neighbors; ++nid) {
@@ -355,14 +362,18 @@ public:
                     }
                 }
             } else if(!is_real_cell){ // transfer data to neighbor
+                //throw std::runtime_error("?");
                 for(int nid = 0; nid < number_of_neighbors; ++nid) {
                     if(migration_and_destination[nid].first < 0) break;
                     const auto& neighborhood_domains = neighborhoods[nid];
                     const auto neighbor_rank  = migration_and_destination[nid].first;
-                    if(neighborhood_domains.is_inside(point)) {
+                    if(neighborhood_domains.contains(point)) {
+                        //std::cout << "Transferring " << point << " to " << neighbor_rank << std::endl;
                         migration_and_destination[nid].second.push_back(elements[data_id]);
                         std::iter_swap(elements.begin() + data_id, elements.end() - 1);
                         elements.pop_back();
+                        nb_migrate++;
+                        break;
                     }
                 }
             } else {
@@ -370,16 +381,19 @@ public:
             }
             data_id++;
         }
+        //std::cout << "Transfer " << sent_load << " to "<< DBG_RANK << std::endl;
 
+//        std::cout << my_rank << " transferred " << nb_migrate << std::endl;
         {
-            std::vector<MPI_Request> srequests(number_of_neighbors);
             //migrate the data
+            std::vector<MPI_Request> srequests(number_of_neighbors);
             for(int nid = 0; nid < number_of_neighbors; ++nid) {
                 int dest_rank = migration_and_destination[nid].first;
                 auto& buf     = migration_and_destination[nid].second;
                 MPI_Isend(buf.data(), buf.size(), datatype, dest_rank, 101010, MPI_COMM_WORLD, &srequests[nid]);
             }
             std::vector<A> buf;
+            double recv_load = 0;
             for(int nid = 0; nid < number_of_neighbors; ++nid) {
                 int dest_rank = migration_and_destination[nid].first;
                 MPI_Status status;
@@ -388,8 +402,10 @@ public:
                 MPI_Get_count(&status, datatype, &count);
                 buf.resize(count);
                 MPI_Recv(buf.data(), count, datatype, dest_rank, 101010, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                recv_load += lc.compute_load(buf);
                 std::move(buf.begin(), buf.end(), std::back_inserter(elements));
             }
+            //if(my_rank == DBG_RANK) std::cout << DBG_RANK<< " received " <<recv_load << std::endl;
             MPI_Waitall(number_of_neighbors, srequests.data(), MPI_STATUSES_IGNORE);
         }
 
@@ -399,9 +415,15 @@ public:
 
     template<class NumericalType>
     const NumericalType get_vertex_id(const Point_3& v, int N) const {
-        auto proc_per_row = (NumericalType) std::cbrt(N) + 1;
-        const double step = (d.xmax - d.xmin) / (proc_per_row-1);
-        return position_to_cell<NumericalType>(v, step, proc_per_row, proc_per_row);
+        auto vertices_per_row = (NumericalType) std::cbrt(N)+1;
+        const double step = (d.xmax - d.xmin) / (vertices_per_row);
+//        std::cout
+//        << (v.x() / step) << " + "
+//        << vertices_per_row * v.z() / step << " + "
+//        << vertices_per_row * vertices_per_row * v.y() / step << std::endl;
+        //std::cout << v.y() << std::endl;
+        return (v.x() / step) + vertices_per_row * v.z() / step  + vertices_per_row * vertices_per_row * v.y() / step;
+        //return position_to_cell<NumericalType>(v, step, proc_per_row, proc_per_row);
     }
 
     void init_communicators(int world_size) {

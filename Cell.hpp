@@ -9,7 +9,7 @@
 #include <Communicator.hpp>
 
 struct Cell {
-    int gid, type; //type = -1:empty, 0:rock, 1:water
+    int gid, type; // type = -1:empty, 0:rock, 1:water
     float weight, erosion_probability;
     double average_load = 2000;
 
@@ -35,7 +35,7 @@ struct Cell {
     std::tuple<double, double, double> get_center() const {
         int x,y,z;
         lb::linear_to_grid(gid, Cell::get_msx(), Cell::get_msy(), x, y, z); //cell_to_global_position(Cell::get_msx(), Cell::get_msy(), gid);
-        return std::make_tuple(x+Cell::get_cell_size(), y+Cell::get_cell_size(), z+Cell::get_cell_size());
+        return std::make_tuple(x+Cell::get_cell_size()/2.0, y+Cell::get_cell_size()/2.0, z+Cell::get_cell_size()/2.0);
     }
 
     void get_center(double* _x, double* _y, double* _z) const {

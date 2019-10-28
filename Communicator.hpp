@@ -62,7 +62,7 @@ public:
     };
 
 
-    void Bcast_hypercube(void* buffer, int count, MPI_Datatype type, int root)  const {
+    void Bcast_hypercube(void* buffer, int count, MPI_Datatype type, int root, int tag)  const {
         if(world_to_comm.find(world_rank) == world_to_comm.end()) {
             return;
         }
@@ -80,16 +80,16 @@ public:
             if((virtual_rank & mask) == 0) {
                 if((virtual_rank & ((int) std::pow(2, i))) == 0) {
                     int virtual_dest   = virtual_rank ^ ((int) std::pow(2, i));
-                    MPI_Send(buffer, count, type, comm_to_world.at(virtual_dest ^ world_to_comm.at(root)), 0, MPI_COMM_WORLD);
+                    MPI_Send(buffer, count, type, comm_to_world.at(virtual_dest ^ world_to_comm.at(root)), tag, MPI_COMM_WORLD);
                 } else {
                     int virtual_src   = virtual_rank ^ ((int) std::pow(2, i));
-                    MPI_Recv(buffer, count, type, comm_to_world.at( virtual_src ^ world_to_comm.at(root)), 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                    MPI_Recv(buffer, count, type, comm_to_world.at( virtual_src ^ world_to_comm.at(root)), tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
                 }
             }
         }
     }
 
-    void Bcast(void* buffer, int count, MPI_Datatype type, int root) const {
+    void Bcast(void* buffer, int count, MPI_Datatype type, int root, int tag) const {
         if (world_to_comm.find(world_rank) == world_to_comm.end()) {
             return;
         }
@@ -100,14 +100,14 @@ public:
         int i = 0;
         if(root == world_rank)
             for(auto const n : comm_to_world) {
-                MPI_Isend(buffer, count, type, n, 123456, MPI_COMM_WORLD, &reqs[i]);
+                MPI_Isend(buffer, count, type, n, tag, MPI_COMM_WORLD, &reqs[i]);
                 ++i;
             }
-        else MPI_Recv(buffer, count, type, root, 123456, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        else MPI_Recv(buffer, count, type, root, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         MPI_Waitall(i, reqs.data(), MPI_STATUSES_IGNORE);
     }
 
-    void Allgather(void* sendbuffer, int sendcount, MPI_Datatype sendtype, void* recvbuffer, int recvcount, MPI_Datatype recvtype) const {
+    void Allgather(void* sendbuffer, int sendcount, MPI_Datatype sendtype, void* recvbuffer, int recvcount, MPI_Datatype recvtype, int tag) const {
         if (world_to_comm.find(world_rank) == world_to_comm.end()) {
             return;
         }
@@ -120,7 +120,7 @@ public:
         int dim = (int)(std::log2(comm_to_world.size()));
         if(std::pow(2, dim) == comm_to_world.size())
             for(auto root : comm_to_world) {
-                Bcast_hypercube(root == world_rank ? sendbuffer : ((char*) recvbuffer + i*recvcount*size), sendcount, sendtype, root);
+                Bcast_hypercube(root == world_rank ? sendbuffer : ((char*) recvbuffer + i*recvcount*size), sendcount, sendtype, root, tag);
                 if(root == world_rank){
                     std::copy((char*) sendbuffer, (char*)sendbuffer + sendcount * size, ((char*) recvbuffer + i*recvcount*size));
                 }
@@ -128,7 +128,7 @@ public:
             }
         else
             for(auto root : comm_to_world) {
-                Bcast(root == world_rank ? sendbuffer : ((char*) recvbuffer + i*recvcount*size), sendcount, sendtype, root);
+                Bcast(root == world_rank ? sendbuffer : ((char*) recvbuffer + i*recvcount*size), sendcount, sendtype, root, tag);
                 if(root == world_rank){
                     std::copy((char*) sendbuffer, (char*)sendbuffer + sendcount * size, ((char*) recvbuffer + i*recvcount*size));
                 }

@@ -8,25 +8,26 @@ Vector_3 constraint_force(const Box3& d, const Point_3& p, const Vector_3& f){
     const auto y = p.y();
     const auto z = p.z();
     double fx = f.x(), fy = f.y(), fz = f.z();
-    if(x == d.xmin) {
-        fx = 0;
+
+    if(x <= d.xmin+std::numeric_limits<float>::epsilon()) {
+        fx = 0.0;
     }
-    if(y == d.ymin) {
-        fy = 0;
+    if(y <= d.ymin+std::numeric_limits<float>::epsilon()) {
+        fy = 0.0;
     }
-    if(z == d.zmin) {
-        fz = 0;
+    if(z <= d.zmin+std::numeric_limits<float>::epsilon()) {
+        fz = 0.0;
     }
-    if(x == d.xmax) {
-        fx = 0;
+    if(x >= d.xmax-std::numeric_limits<float>::epsilon()) {
+        fx = 0.0;
     }
-    if(y == d.ymax) {
-        fy = 0;
+    if(y >= d.ymax-std::numeric_limits<float>::epsilon()) {
+        fy = 0.0;
     }
-    if(z == d.zmax) {
-        fz = 0;
+    if(z >= d.zmax-std::numeric_limits<float>::epsilon()) {
+        fz = 0.0;
     }
-    return Vector_3(fx,fy,fz);
+    return Vector_3(fx, fy, fz);
 }
 double lb_getTetraederVolumeIndexed(int c1, int c2, int c3, int c4, const std::array<Point_3, 8>& vertices) {
     double dir1_0, dir1_1, dir1_2;
@@ -85,16 +86,17 @@ std::array<Tetrahedron_3, 6> get_tetrahedra(const std::array<Point_3, 8>& vertic
 }
 Point_3 get_center_of_load(const std::vector<double>& weights, const std::vector<Point_3>& elements) {
 
-    const double total_weight = std::accumulate(weights.cbegin(), weights.cend(), 0.0);
+    const double total_mass = std::accumulate(weights.cbegin(), weights.cend(), 0.0);
     const auto size = elements.size();
 
-    Point_3 r(0, 0, 0);
-
+    double xcm = 0.0; double ycm = 0.0; double zcm = 0.0;
     for(int i = 0; i < size; ++i) {
-        r = r + (weights[i] * elements[i]);
+        xcm += (weights[i] * elements[i].x());
+        ycm += (weights[i] * elements[i].y());
+        zcm += (weights[i] * elements[i].z());
     }
 
-    return (1.0/total_weight) * r;
+    return Point_3(xcm / total_mass, ycm / total_mass, zcm / total_mass);
 }
 double compute_normalized_load(double my_load, double unit) {
     return my_load / unit;

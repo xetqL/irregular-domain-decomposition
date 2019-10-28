@@ -10,6 +10,7 @@
 #include <CGAL/Cartesian.h>
 #include <CGAL/Aff_transformation_3.h>
 #include <CGAL/squared_distance_3.h>
+#include <ostream>
 
 namespace lb {
 
@@ -22,6 +23,12 @@ using Transformation = CGAL::Aff_transformation_3<Kernel>;
 
 struct Box3 {
     double xmin, ymin, zmin, xmax, ymax, zmax;
+
+    friend std::ostream &operator<<(std::ostream &os, const Box3 &box3) {
+        os << "xmin: " << box3.xmin << " ymin: " << box3.ymin << " zmin: " << box3.zmin << " xmax: " << box3.xmax
+           << " ymax: " << box3.ymax << " zmax: " << box3.zmax;
+        return os;
+    }
 };
 
 Point_3 move_vertex(const Point_3& vertex, const Vector_3& force, double mu);
@@ -37,7 +44,6 @@ inline void linear_to_grid(const A index, const A c, const A r, int& x_idx, int&
     z_idx = (int) std::floor(index / (c*r));     // depth
     assert(x_idx < c);
     assert(y_idx < r);
-    assert(z_idx < r);
 };
 
 template<class NumericalType>

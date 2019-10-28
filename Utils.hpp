@@ -41,5 +41,17 @@ inline std::vector<double> get_neighbors_load(double my_load, MPI_Comm neighborh
     MPI_Allgather(&my_load, 1, MPI_DOUBLE, all_loads.data(), 1, MPI_DOUBLE, MPI_COMM_WORLD);
     return all_loads;
 }
+namespace std
+{
+template<class InputIt, class BinaryFunction, class T>
+T reduce(InputIt begin, InputIt end, BinaryFunction f, T start) {
+    T result = start;
+    while(begin != end) {
+        result = f(result, *begin);
+        begin++;
+    }
+    return result;
+}
 
+}
 #endif //ADLBIRREG_UTILS_HPP

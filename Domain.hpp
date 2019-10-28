@@ -97,16 +97,16 @@ struct Domain {
         const double p_m1         = ((proc_per_row - 1) / proc_per_row);
 
         Transformation translate_right(  CGAL::TRANSLATION, Vector_3(std::abs(p1.x() - p2.x()) / proc_per_row, 0, 0));
-        Transformation translate_fullleft(  CGAL::TRANSLATION, Vector_3(-row_size * std::abs(p1.x() - p2.x()) / proc_per_row, 0, 0));
+        Transformation translate_fullleft(  CGAL::TRANSLATION, Vector_3(-(p2.x()-p1.x()), 0, 0));
 
         Transformation translate_up(     CGAL::TRANSLATION, Vector_3(0, 0, std::abs(p1.z() - p5.z()) / proc_per_row));
-        Transformation translate_fulldown(     CGAL::TRANSLATION, Vector_3(0, 0, -row_size * std::abs(p1.z() - p5.z()) * p_m1));
+        Transformation translate_fulldown(     CGAL::TRANSLATION, Vector_3(0, 0, -(p5.z() - p1.z())));
 
         Transformation translate_forward(CGAL::TRANSLATION, Vector_3(0, std::abs(p1.y() - p3.y()) / proc_per_row,   0));
-        Transformation translate_backward(CGAL::TRANSLATION, Vector_3(0, -std::abs(p1.y() - p3.y()) / proc_per_row, 0));
+        Transformation translate_backward(CGAL::TRANSLATION, Vector_3(0, -std::abs(p3.y() - p1.y()) / proc_per_row, 0));
 
-        Transformation translate_fullbackward(CGAL::TRANSLATION, Vector_3(0, -row_size * std::abs(p1.y() - p3.y()) * p_m1, 0));
-        Transformation translate_fullforward(CGAL::TRANSLATION, Vector_3(0, row_size * std::abs(p1.y() - p3.y()) * p_m1, 0));
+        Transformation translate_fullbackward(CGAL::TRANSLATION, Vector_3(0, -std::abs(p1.y() - p3.y()), 0));
+        Transformation translate_fullforward(CGAL::TRANSLATION, Vector_3(0, std::abs(p1.y() - p3.y()), 0));
 
         std::array<Point_3, 8> partition_vertices =
                 {p1,

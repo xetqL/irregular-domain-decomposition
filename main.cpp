@@ -48,11 +48,26 @@ struct GridElementComputer {
 
 struct GridPointTransformer {
     Point_3 transform(const Cell& element){
-        double x,y,z;
-        std::tie(x,y,z) = element.get_center();
+        double x, y, z;
+        std::tie(x, y, z) = element.get_center();
         return Point_3(x, y, z);
     }
 };
+
+}
+
+void print_load_statitics(lb::Partition::LoadStatistics stats){
+    lb::Partition::ElementCount count;
+    lb::Partition::Load max_load, avg_load;
+    lb::Partition::Imbalance load_imbalance, my_imbalance;
+    std::tie(count, max_load, avg_load, load_imbalance, my_imbalance) = stats;
+    std::cout << "===============================================\n"
+              << "Total number of elements: " << count             << "\n"
+              << "            Maximum load: " << max_load          << "\n"
+              << "            Average load: " << avg_load          << "\n"
+              << "   Global Load Imbalance: " << load_imbalance    << "\n"
+              << "       My Load Imbalance: " << my_imbalance      <<
+               "\n===============================================" << std::endl;
 
 }
 
@@ -66,9 +81,9 @@ int main() {
         procs_y = procs_x,
         procs_z = procs_x;
 
-    const int DOMAIN_SIZE_X = 10;
-    const int DOMAIN_SIZE_Y = 10;
-    const int DOMAIN_SIZE_Z = 10;
+    const int DOMAIN_SIZE_X = 12;
+    const int DOMAIN_SIZE_Y = 12;
+    const int DOMAIN_SIZE_Z = 12;
 
     lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z);
 
@@ -88,10 +103,9 @@ int main() {
     std::mt19937 gen{rd()};
     std::normal_distribution<double> normal_distribution(1.0 + my_rank % 2, 0.2);
 
-    auto bbox = CGAL::bbox_3(part.vertices.begin(), part.vertices.end());
-    int nb_cells_x = (int) (bbox.xmax() - bbox.xmin()) / d.grid_cell_size;
-    int nb_cells_y = (int) (bbox.ymax() - bbox.ymin()) / d.grid_cell_size;
-    int nb_cells_z = (int) (bbox.zmax() - bbox.zmin()) / d.grid_cell_size;
+    int nb_cells_x = (int) DOMAIN_SIZE_X / procs_x / d.grid_cell_size;
+    int nb_cells_y = (int) DOMAIN_SIZE_Y / procs_y / d.grid_cell_size;
+    int nb_cells_z = (int) DOMAIN_SIZE_Z / procs_z / d.grid_cell_size;
 
     auto cell_per_process = nb_cells_x * nb_cells_y * nb_cells_z;
 
@@ -100,27 +114,31 @@ int main() {
     int x_proc_idx, y_proc_idx, z_proc_idx; lb::linear_to_grid(my_rank, procs_x, procs_y, x_proc_idx, y_proc_idx, z_proc_idx);
 
     const int total_cells_x = nb_cells_x * procs_x, total_cells_y = nb_cells_y * procs_y, total_cells_z = nb_cells_z * procs_z;
+
     auto x_shift = (nb_cells_x * x_proc_idx);
     auto y_shift = (nb_cells_y * y_proc_idx);
     auto z_shift = (nb_cells_z * z_proc_idx);
-    for(int x = 0; x < nb_cells_x; ++x) {
+    lb::GridPointTransformer gpt;
+    for(int z = 0; z < nb_cells_z; ++z) {
         for(int y = 0; y < nb_cells_y; ++y) {
-            for(int z = 0; z < nb_cells_z; ++z) {
-
-                int gid = x_shift + x + (y_shift + y) * total_cells_x + (z_shift + z) * total_cells_x * total_cells_y;
-
-                my_cells.emplace_back(gid, 0, normal_distribution(gen), 0.0);
+            for(int x = 0; x < nb_cells_x; ++x) {
+                int gid = (x_shift + x) + (y_shift + y) * total_cells_x + (z_shift + z) * total_cells_x * total_cells_y;
+                my_cells.emplace_back(gid, 0, my_rank % 5 ? 1 : 10, 0.0);
             }
         }
     }
+    //return 0;
     //std::cout << "BEFORE: " << part.get_load_imbalance<GridElementComputer>(my_cells) << std::endl;
+    auto stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
 
-    auto data = part.move_vertices<lb::GridPointTransformer, lb::GridElementComputer, Cell>(my_cells, datatype_wrapper.element_datatype);
+    if(!my_rank) print_load_statitics(stats);
 
-    //std::cout << "AFTER: " << part.get_load_imbalance<GridElementComputer>(my_cells) << std::endl;
+    for(int i = 0; i < 8; ++i){
+        auto data = part.move_vertices<lb::GridPointTransformer, lb::GridElementComputer, Cell>(my_cells, datatype_wrapper.element_datatype);
+        stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
+        if(!my_rank) print_load_statitics(stats);
+    }
 
-    std::cout << my_rank << " " << part << "  " <<  std::endl;
-    std::for_each(part.neighbor_list.cbegin(), part.neighbor_list.cend(), [&](auto val){std::cout << my_rank << " has " << val << std::endl;});
     MPI_Finalize();
 
     return 0;
