@@ -33,9 +33,9 @@ struct Cell {
     }
 
     std::tuple<double, double, double> get_center() const {
-        int x,y,z;
+        int x, y, z;
         lb::linear_to_grid(gid, Cell::get_msx(), Cell::get_msy(), x, y, z); //cell_to_global_position(Cell::get_msx(), Cell::get_msy(), gid);
-        return std::make_tuple(x+Cell::get_cell_size()/2.0, y+Cell::get_cell_size()/2.0, z+Cell::get_cell_size()/2.0);
+        return std::make_tuple(x*Cell::get_cell_size()+Cell::get_cell_size()/2.0, y*Cell::get_cell_size()+Cell::get_cell_size()/2.0, z*Cell::get_cell_size()+Cell::get_cell_size()/2.0);
     }
 
     void get_center(double* _x, double* _y, double* _z) const {
@@ -103,6 +103,14 @@ struct Cell {
     static double& get_cell_size(){
         static double size;
         return size;
+    }
+
+    friend bool operator==(const Cell &lhs, const Cell &rhs) {
+        return lhs.gid == rhs.gid;
+    }
+
+    friend bool operator!=(const Cell &lhs, const Cell &rhs) {
+        return !(rhs == lhs);
     }
 
     friend std::ostream &operator<<(std::ostream &os, const Cell &cell) {

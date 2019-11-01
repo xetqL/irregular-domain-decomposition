@@ -205,7 +205,15 @@ public:
     using ElementCount   = int;
     using Load           = double;
     using Imbalance      = double;
-    using LoadStatistics = std::tuple<ElementCount, Load, Load, Imbalance, Imbalance>;
+    struct LoadStatistics : std::tuple<ElementCount, Load, Load, Imbalance, Imbalance> {
+        ElementCount e;
+        Load max_load, avg_load, my_load;
+        Imbalance global, mine;
+
+        LoadStatistics(ElementCount e, Load maxl, Load avgl, Load myl, Imbalance global, Imbalance mine):
+            e(e), max_load(maxl), avg_load(avgl), my_load(myl), global(global), mine(mine), std::tuple<ElementCount, Load, Load, Imbalance, Imbalance>(e, maxl, avgl, global, mine){}
+    };
+
 
     template<class LoadComputer, class A>
     LoadStatistics get_load_statistics(const std::vector<A>& elements, MPI_Comm neighborhood = MPI_COMM_WORLD){
@@ -214,15 +222,17 @@ public:
         int buf;
         double my_load = lc.compute_load(elements);
         int N; MPI_Comm_size(neighborhood, &N);
-        auto all_loads = get_neighbors_load(my_load, neighborhood); //global load balancing with MPI_COMM_WORLD
+        auto all_loads = ::get_neighbors_load(my_load, neighborhood); //global load balancing with MPI_COMM_WORLD
         auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / N;
         auto max_load  =*std::max_element(all_loads.cbegin(), all_loads.cend());
         MPI_Allreduce(&count, &buf, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-        return {buf, max_load, avg_load, (max_load / avg_load) - 1.0, (my_load / avg_load) - 1.0, };
+        return {buf, max_load, avg_load, my_load, (max_load / avg_load) - 1.0, (my_load / avg_load) - 1.0};
     }
 
     template<class CartesianPointTransformer, class LoadComputer, class A>
-    std::vector<std::pair<ProcRank, std::vector<DataIndex>>> move_vertices(std::vector<A>& elements, MPI_Datatype datatype, MPI_Comm neighborhood = MPI_COMM_WORLD) {
+    std::vector<std::pair<ProcRank, std::vector<DataIndex>>> move_vertices(
+            std::vector<A>& elements, MPI_Datatype datatype, double avg_load, double mu = 1.0, MPI_Comm neighborhood = MPI_COMM_WORLD) {
+
         get_MPI_rank(my_rank);
         LoadComputer lc;
         CartesianPointTransformer transformer;
@@ -236,19 +246,14 @@ public:
 
         int N; MPI_Comm_size(neighborhood, &N);
 
-        auto all_loads = get_neighbors_load(my_load, neighborhood); //global load balancing with MPI_COMM_WORLD
+        auto all_loads = get_neighbors_load(my_load, neighbor_list, vertex_neighborhood); //global load balancing with MPI_COMM_WORLD
 
-        auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / N;
-
-        std::vector<double> normalized_loads;
-
-        std::transform(all_loads.cbegin(), all_loads.cend(), std::back_inserter(normalized_loads), [&avg_load](auto n){return n/avg_load;});
+        //double avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / N;
 
         //auto max_normalized_load = *std::max_element(normalized_loads.cbegin(), normalized_loads.cend());
 
-        double mu = 0;//compute_mu(grid_size, max_normalized_load);
+        //double mu = 0.05;//compute_mu(grid_size, max_normalized_load);
 
-        std::transform(all_loads.cbegin(), all_loads.cend(), std::back_inserter(normalized_loads), [&avg_load](auto v){return v / avg_load;});
 
         auto center_of_load = get_center_of_load(weights, points);
 
@@ -272,14 +277,16 @@ public:
                     auto v   = vertices[com];
                     auto vid = vertices_id[com];
                     const auto& communicator = vertex_neighborhood[vid];
+                    std::vector<double> normalized_loads, loads = (*search_in_linear_hashmap<8, double>(all_loads, vid)).second;
+                    std::transform(loads.cbegin(), loads.cend(), std::back_inserter(normalized_loads), [&avg_load](auto n){return n/avg_load;});
                     auto cls = (*search_in_linear_hashmap<8, Point_3>(all_cl, vid)).second;
-                    auto f1  = get_vertex_force(v, cls, normalized_loads);
+                    auto f1  = -get_vertex_force(v, cls, normalized_loads);
                     auto f1_after = constraint_force(d, v, f1);
                     new_vertices[com] = move_vertex(v, f1_after, mu);
                     int valid = lb_isGeometryValid(new_vertices, get_planes(new_vertices), grid_size);
                     std::vector<int> allValid(communicator.comm_size);
-                    communicator.Allgather(&valid, 1, MPI_INT, allValid.data(), 1, MPI_INT, vid);
 
+                    communicator.Allgather(&valid, 1, MPI_INT, allValid.data(), 1, MPI_INT, vid);
                     int are_all_valid = std::accumulate(allValid.begin(),allValid.end(),1,[](auto k,auto v){return k*v;});
                     if(are_all_valid) {
                         vertices = new_vertices;
@@ -328,6 +335,7 @@ public:
                 i++;
             }
         }
+
         MPI_Waitall(neighbor_list.size(), rrequests.data(), MPI_STATUSES_IGNORE);
         MPI_Waitall(neighbor_list.size(), srequests.data(), MPI_STATUSES_IGNORE);
 
@@ -339,20 +347,20 @@ public:
 
         //TAG MY DATA
         int DBG_RANK = 7;
-        const auto nb_elements = elements.size();
+        //const auto nb_elements = elements.size();
         size_t data_id = 0;
         size_t nb_migrate = 0;
         double sent_load = 0;
-        while(data_id < nb_elements) {
+        while(data_id < elements.size()) {
             auto point = transformer.transform(elements[data_id]);
             bool is_real_cell = this->contains(point);
 
             auto closest_planes = find_planes_closer_than(planes, point, sqrt_3*grid_size);
-            if(closest_planes.size() > 0 && is_real_cell) { // IS A NEIGHBORING CELL, i will move it to them proc that share the closest planes
+            if(closest_planes.size() > 0 && is_real_cell) { // IS A NEIGHBORING CELL, i will move it to the proc that share the closest planes
                 for(int nid = 0; nid < number_of_neighbors; ++nid) {
                     const auto& neighborhood_domains = neighborhoods[nid];
                     bool found = false;
-                    for(const Plane_3& close_plane : closest_planes){
+                    for(const Plane_3& close_plane : closest_planes) {
                          found = std::any_of(neighborhood_domains.planes.cbegin(), neighborhood_domains.planes.cend(),
                                  [&close_plane](const Plane_3& p){return p == close_plane;});
                          if(found) break;
@@ -364,9 +372,9 @@ public:
             } else if(!is_real_cell){ // transfer data to neighbor
                 //throw std::runtime_error("?");
                 for(int nid = 0; nid < number_of_neighbors; ++nid) {
-                    if(migration_and_destination[nid].first < 0) break;
+                    const auto  neighbor_rank = migration_and_destination[nid].first;
+                    if(neighbor_rank < 0 || neighbor_rank == my_rank) continue;
                     const auto& neighborhood_domains = neighborhoods[nid];
-                    const auto neighbor_rank  = migration_and_destination[nid].first;
                     if(neighborhood_domains.contains(point)) {
                         //std::cout << "Transferring " << point << " to " << neighbor_rank << std::endl;
                         migration_and_destination[nid].second.push_back(elements[data_id]);
@@ -381,23 +389,25 @@ public:
             }
             data_id++;
         }
-        //std::cout << "Transfer " << sent_load << " to "<< DBG_RANK << std::endl;
 
-//        std::cout << my_rank << " transferred " << nb_migrate << std::endl;
+        //std::cout << "Transfer " << sent_load << " to "<< DBG_RANK << std::endl;
+        //std::cout << my_rank << " transferred " << nb_migrate << std::endl;
+
         {
             //migrate the data
             std::vector<MPI_Request> srequests(number_of_neighbors);
             for(int nid = 0; nid < number_of_neighbors; ++nid) {
                 int dest_rank = migration_and_destination[nid].first;
-                auto& buf     = migration_and_destination[nid].second;
-                MPI_Isend(buf.data(), buf.size(), datatype, dest_rank, 101010, MPI_COMM_WORLD, &srequests[nid]);
+                assert(migration_and_destination[nid].second.size() == 0 | dest_rank != my_rank);
+                MPI_Isend(migration_and_destination[nid].second.data(),
+                          migration_and_destination[nid].second.size(), datatype, dest_rank, 101010, MPI_COMM_WORLD, &srequests[nid]);
             }
+
             std::vector<A> buf;
             double recv_load = 0;
             for(int nid = 0; nid < number_of_neighbors; ++nid) {
                 int dest_rank = migration_and_destination[nid].first;
-                MPI_Status status;
-                MPI_Probe(dest_rank, 101010, MPI_COMM_WORLD, &status);
+                MPI_Status status; MPI_Probe(dest_rank, 101010, MPI_COMM_WORLD, &status);
                 int count;
                 MPI_Get_count(&status, datatype, &count);
                 buf.resize(count);
@@ -408,8 +418,6 @@ public:
             //if(my_rank == DBG_RANK) std::cout << DBG_RANK<< " received " <<recv_load << std::endl;
             MPI_Waitall(number_of_neighbors, srequests.data(), MPI_STATUSES_IGNORE);
         }
-
-        //return the ghosts
         return neighbor_ghosts;
     }
 

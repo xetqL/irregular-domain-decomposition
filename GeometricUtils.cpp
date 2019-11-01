@@ -105,7 +105,7 @@ Vector_3 get_vertex_force(const Point_3& vertex, const std::vector<Point_3>& cen
     Vector_3 f(0,0,0);
     const auto size = centers_of_load.size();
     for(int i = 0; i < size; ++i) {
-        f += (normalized_loads[i] - 1) * get_direction(vertex, centers_of_load[i]);
+        f += (normalized_loads[i] - 1.0) * get_direction(vertex, centers_of_load[i]);
     }
     return f;
 }

@@ -121,6 +121,7 @@ std::vector<Point_3> get_centers_of_load_for_vertex(const Point_3& cl, MPI_Comm 
  */
 
 double compute_normalized_load(double my_load, double unit);
+
 inline Vector_3 get_direction(const Point_3& vertex, const Point_3& center_of_load) {
     return (vertex - center_of_load)/std::sqrt(CGAL::squared_distance(vertex, center_of_load));
 }
@@ -138,6 +139,27 @@ std::vector<Point_3> get_points(InputIterator beg, InputIterator end){
         i+=3;
     }
     return points;
+}
+template<class A>
+bool is_there_duplicates(const std::vector<A>& els){
+    const auto sz = els.size();
+    for(int i = 0; i < sz; ++i){
+        for(int j = i+1; j < sz; ++j){
+            if(els[i] == els[j]) {
+                std::cout << els[i] << " " << els[j] << std::endl;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+template<class A>
+bool exists(const A& el, const std::vector<A>& els){
+    const auto sz = els.size();
+    for(int i = 0; i < sz; ++i){
+        if(els[i] == el) return true;
+    }
+    return false;
 }
 
 }
