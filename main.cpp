@@ -81,13 +81,13 @@ int main() {
         procs_y = procs_x,
         procs_z = procs_x;
 
-    const int DOMAIN_SIZE_X = 24;
-    const int DOMAIN_SIZE_Y = 24;
-    const int DOMAIN_SIZE_Z = 24;
+    const int DOMAIN_SIZE_X = 10;
+    const int DOMAIN_SIZE_Y = 10;
+    const int DOMAIN_SIZE_Z = 10;
 
     lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z);
 
-    d.grid_cell_size = 1.0;
+    d.grid_cell_size = 0.1;
 
     Cell::get_msx() = DOMAIN_SIZE_X / d.grid_cell_size;
     Cell::get_msy() = DOMAIN_SIZE_Y / d.grid_cell_size;
@@ -103,9 +103,9 @@ int main() {
     std::mt19937 gen{rd()};
     std::normal_distribution<double> normal_distribution(1.0 + my_rank % 2, 0.2);
 
-    int nb_cells_x = (int) DOMAIN_SIZE_X / procs_x / d.grid_cell_size;
-    int nb_cells_y = (int) DOMAIN_SIZE_Y / procs_y / d.grid_cell_size;
-    int nb_cells_z = (int) DOMAIN_SIZE_Z / procs_z / d.grid_cell_size;
+    int nb_cells_x = (DOMAIN_SIZE_X / (double) procs_x / (double) d.grid_cell_size);
+    int nb_cells_y = (DOMAIN_SIZE_Y / (double) procs_y / (double) d.grid_cell_size);
+    int nb_cells_z = (DOMAIN_SIZE_Z / (double) procs_z / (double) d.grid_cell_size);
 
     auto cell_per_process = nb_cells_x * nb_cells_y * nb_cells_z;
 

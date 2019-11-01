@@ -38,12 +38,6 @@ struct Cell {
         return std::make_tuple(x*Cell::get_cell_size()+Cell::get_cell_size()/2.0, y*Cell::get_cell_size()+Cell::get_cell_size()/2.0, z*Cell::get_cell_size()+Cell::get_cell_size()/2.0);
     }
 
-    void get_center(double* _x, double* _y, double* _z) const {
-        int x,y,z;
-        lb::linear_to_grid(gid, Cell::get_msx(), Cell::get_msy(), x, y, z); //cell_to_global_position(Cell::get_msx(), Cell::get_msy(), gid);
-        *_x=x+Cell::get_cell_size(); *_y=y+Cell::get_cell_size(); *_z =z+Cell::get_cell_size();
-    }
-
     static CommunicationDatatype register_datatype() {
 
         MPI_Datatype cell_datatype, gid_type_datatype;

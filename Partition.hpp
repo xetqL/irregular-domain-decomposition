@@ -246,13 +246,7 @@ public:
 
         int N; MPI_Comm_size(neighborhood, &N);
 
-        auto all_loads = get_neighbors_load(my_load, neighbor_list, vertex_neighborhood); //global load balancing with MPI_COMM_WORLD
-
-        //double avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / N;
-
-        //auto max_normalized_load = *std::max_element(normalized_loads.cbegin(), normalized_loads.cend());
-
-        //double mu = 0.05;//compute_mu(grid_size, max_normalized_load);
+        //auto all_loads = get_neighbors_load(my_load, neighbor_list, vertex_neighborhood); //global load balancing with MPI_COMM_WORLD
 
 
         auto center_of_load = get_center_of_load(weights, points);
