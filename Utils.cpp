@@ -3,7 +3,7 @@
 //
 #include <Utils.hpp>
 
-std::array<std::pair<int, std::vector<double>>, 8>
+LinearHashMap<int, std::vector<double>, 8>
 get_neighbors_load(double my_load, const std::set<int> &neighbors, const std::map<int, Communicator> &v_neighborhood) {
     const auto nb_neighbors = neighbors.size();
     std::array<std::pair<int, std::vector<double>>, 8> neighborhoods_load;

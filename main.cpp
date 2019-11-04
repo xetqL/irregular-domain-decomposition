@@ -7,6 +7,7 @@
 #include <thread>
 #include <set>
 #include "Communicator.hpp"
+#include "DiffusiveOptimizer.hpp"
 #include <Domain.hpp>
 #include <Cell.hpp>
 
@@ -68,7 +69,6 @@ void print_load_statitics(lb::Partition::LoadStatistics stats){
               << "   Global Load Imbalance: " << load_imbalance    << "\n"
               << "       My Load Imbalance: " << my_imbalance      <<
                "\n===============================================" << std::endl;
-
 }
 
 int main() {
@@ -140,23 +140,24 @@ int main() {
         MPI_Barrier(MPI_COMM_WORLD);
     }
     auto prev_imbalance = stats.global;
-    double mu = 0.5;
+    double mu = 1.0;
 
     auto all_loads = get_neighbors_load(stats.my_load, MPI_COMM_WORLD); //global load balancing with MPI_COMM_WORLD
     auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / world_size;
+    lb::DiffusiveOptimizer<lb::GridPointTransformer, lb::GridElementComputer, Cell> diff_opt;
 
-    for(int j = 0; j < 50; ++j){
+    /*for(int j = 0; j < 50; ++j){
         auto data = part.move_vertices<lb::GridPointTransformer, lb::GridElementComputer, Cell>(my_cells, datatype_wrapper.element_datatype, avg_load, mu);
         stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
         if(prev_imbalance <= stats.global) mu *= 0.9;
         prev_imbalance = stats.global;
         if(!my_rank)
             print_load_statitics(stats);
-        for(int i = 0; i < world_size; ++i){
+        for(int i = 0; i < world_size; ++i) {
             if(my_rank == i) io::scatterplot_3d_output<lb::GridPointTransformer>(i, "debug-domain-decomposition-"+std::to_string(j+1)+".dat", my_cells);
             MPI_Barrier(MPI_COMM_WORLD);
         }
-    }
+    }*/
 
     MPI_Finalize();
 

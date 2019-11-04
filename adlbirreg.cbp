@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6"/>
+	<Project>
+		<Option title="adlbirreg"/>
+		<Option makefile_is_custom="1"/>
+		<Option compiler="gcc"/>
+		<Option virtualFolders="CMake Files\;CMake Files\..\;CMake Files\..\..\;CMake Files\..\..\..\;CMake Files\..\..\..\..\;CMake Files\..\..\..\..\..\;CMake Files\..\..\..\..\..\usr\;CMake Files\..\..\..\..\..\usr\lib64\;CMake Files\..\..\..\..\..\usr\lib64\cmake\;CMake Files\..\..\..\..\..\usr\lib64\cmake\CGAL\;CMake Files\..\..\..\..\..\usr\lib\;CMake Files\..\..\..\..\..\usr\lib\cmake\;CMake Files\..\..\..\..\..\usr\lib\cmake\CGAL\;CMake Files\..\..\..\..\..\usr\lib\cmake\CGAL\config\;CMake Files\..\..\..\..\..\usr\lib\cmake\CGAL\config\support\;"/>
+		<Build>
+			<Target title="all">
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 all"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="rebuild_cache">
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 rebuild_cache"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="edit_cache">
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 edit_cache"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="adlbirreg">
+				<Option output="/home/xetql/projects/cpp/irregular-domain-decomposition/adlbirreg" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
+				<Option object_output="./"/>
+				<Option type="1"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add option="-DCGAL_USE_MPFR"/>
+					<Add option="-DCGAL_USE_GMP"/>
+					<Add directory="/home/xetql/eigen-eigen-323c052e1731"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 adlbirreg"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="adlbirreg/fast">
+				<Option output="/home/xetql/projects/cpp/irregular-domain-decomposition/adlbirreg" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
+				<Option object_output="./"/>
+				<Option type="1"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add option="-DCGAL_USE_MPFR"/>
+					<Add option="-DCGAL_USE_GMP"/>
+					<Add directory="/home/xetql/eigen-eigen-323c052e1731"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 adlbirreg/fast"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="test_communcation">
+				<Option output="/home/xetql/projects/cpp/irregular-domain-decomposition/test_communcation" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
+				<Option object_output="./"/>
+				<Option type="1"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add option="-DCGAL_USE_MPFR"/>
+					<Add option="-DCGAL_USE_GMP"/>
+					<Add directory="/home/xetql/eigen-eigen-323c052e1731"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 test_communcation"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="test_communcation/fast">
+				<Option output="/home/xetql/projects/cpp/irregular-domain-decomposition/test_communcation" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
+				<Option object_output="./"/>
+				<Option type="1"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add option="-DCGAL_USE_MPFR"/>
+					<Add option="-DCGAL_USE_GMP"/>
+					<Add directory="/home/xetql/eigen-eigen-323c052e1731"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 test_communcation/fast"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+		</Build>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/Cell.cpp">
+			<Option target="adlbirreg"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/Cell.hpp">
+			<Option target="adlbirreg"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/Communicator.cpp">
+			<Option target="adlbirreg"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/Communicator.hpp">
+			<Option target="adlbirreg"/>
+			<Option target="test_communcation"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/DiffusiveOptimizer.cpp">
+			<Option target="adlbirreg"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/DiffusiveOptimizer.hpp">
+			<Option target="adlbirreg"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/Domain.cpp">
+			<Option target="adlbirreg"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/Domain.hpp">
+			<Option target="adlbirreg"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/GeometricUtils.cpp">
+			<Option target="adlbirreg"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/GeometricUtils.hpp">
+			<Option target="adlbirreg"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/Partition.cpp">
+			<Option target="adlbirreg"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/Partition.hpp">
+			<Option target="adlbirreg"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/Utils.cpp">
+			<Option target="adlbirreg"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/Utils.hpp">
+			<Option target="adlbirreg"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/comm.cpp">
+			<Option target="test_communcation"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/main.cpp">
+			<Option target="adlbirreg"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/../../../../../usr/lib64/cmake/CGAL/CGALConfig.cmake">
+			<Option virtualFolder="CMake Files\..\..\..\..\..\usr\lib64\cmake\CGAL\"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/../../../../../usr/lib64/cmake/CGAL/CGALConfigVersion.cmake">
+			<Option virtualFolder="CMake Files\..\..\..\..\..\usr\lib64\cmake\CGAL\"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/../../../../../usr/lib64/cmake/CGAL/CGALExports-release.cmake">
+			<Option virtualFolder="CMake Files\..\..\..\..\..\usr\lib64\cmake\CGAL\"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/../../../../../usr/lib64/cmake/CGAL/CGALExports.cmake">
+			<Option virtualFolder="CMake Files\..\..\..\..\..\usr\lib64\cmake\CGAL\"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/../../../../../usr/lib64/cmake/CGAL/CGALLibConfig.cmake">
+			<Option virtualFolder="CMake Files\..\..\..\..\..\usr\lib64\cmake\CGAL\"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/../../../../../usr/lib/cmake/CGAL/CGAL_Common.cmake">
+			<Option virtualFolder="CMake Files\..\..\..\..\..\usr\lib\cmake\CGAL\"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/../../../../../usr/lib/cmake/CGAL/CGAL_CreateSingleSourceCGALProgram.cmake">
+			<Option virtualFolder="CMake Files\..\..\..\..\..\usr\lib\cmake\CGAL\"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/../../../../../usr/lib/cmake/CGAL/CGAL_GeneratorSpecificSettings.cmake">
+			<Option virtualFolder="CMake Files\..\..\..\..\..\usr\lib\cmake\CGAL\"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/../../../../../usr/lib/cmake/CGAL/CGAL_Macros.cmake">
+			<Option virtualFolder="CMake Files\..\..\..\..\..\usr\lib\cmake\CGAL\"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/../../../../../usr/lib/cmake/CGAL/CGAL_SetupBoost.cmake">
+			<Option virtualFolder="CMake Files\..\..\..\..\..\usr\lib\cmake\CGAL\"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/../../../../../usr/lib/cmake/CGAL/CGAL_TweakFindBoost.cmake">
+			<Option virtualFolder="CMake Files\..\..\..\..\..\usr\lib\cmake\CGAL\"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/../../../../../usr/lib/cmake/CGAL/CGAL_VersionUtils.cmake">
+			<Option virtualFolder="CMake Files\..\..\..\..\..\usr\lib\cmake\CGAL\"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/../../../../../usr/lib/cmake/CGAL/CGAL_add_test.cmake">
+			<Option virtualFolder="CMake Files\..\..\..\..\..\usr\lib\cmake\CGAL\"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/../../../../../usr/lib/cmake/CGAL/CGAL_display_flags.cmake">
+			<Option virtualFolder="CMake Files\..\..\..\..\..\usr\lib\cmake\CGAL\"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/../../../../../usr/lib/cmake/CGAL/CGAL_enable_end_of_configuration_hook.cmake">
+			<Option virtualFolder="CMake Files\..\..\..\..\..\usr\lib\cmake\CGAL\"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/../../../../../usr/lib/cmake/CGAL/UseCGAL.cmake">
+			<Option virtualFolder="CMake Files\..\..\..\..\..\usr\lib\cmake\CGAL\"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/../../../../../usr/lib/cmake/CGAL/config/support/CGAL_test_cpp_version.cpp">
+			<Option virtualFolder="CMake Files\..\..\..\..\..\usr\lib\cmake\CGAL\config\support\"/>
+		</Unit>
+	</Project>
+</CodeBlocks_project_file>

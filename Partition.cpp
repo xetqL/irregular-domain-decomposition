@@ -3,7 +3,7 @@
 //
 
 #include "Partition.hpp"
-namespace lb{
+namespace lb {
 double compute_mu(double grid_size, double max_normalized_load){
     double sigma_max = max_normalized_load-1;
     return sigma_max == 0 ? 0 : grid_size/(sigma_max);

@@ -177,10 +177,10 @@ public:
         return ghost_and_ranks;
     }
 
-    std::array<std::pair<int, std::vector<Point_3>>, 8> spread_centers_of_load(const Point_3& cl, const std::map<int, Communicator>& neighborhood) {
+    LinearHashMap<int, std::vector<Point_3>, 8> spread_centers_of_load(const Point_3& cl, const std::map<int, Communicator>& neighborhood) {
         int N;
-        std::array<std::pair<int, std::vector<Point_3>>, 8> all_cl;
-        std::array<std::pair<int, std::vector<double>>,  8> buff_all_cl;
+        LinearHashMap<int, std::vector<Point_3>, 8> all_cl;
+        LinearHashMap<int, std::vector<double>,  8> buff_all_cl;
         std::array<MPI_Request, 8> requests;
 
         std::array<double, 3> my_cl{cl.x(), cl.y(), cl.z()};
@@ -190,8 +190,8 @@ public:
             N     = comm.second.comm_size;
             all_cl[idx] = std::make_pair(i, std::vector<Point_3>());
             buff_all_cl[idx] = std::make_pair(i, std::vector<double>());
-            auto& curr_buff_all_cl = (*search_in_linear_hashmap<8>(buff_all_cl, i)).second;
-            auto& curr_all_cl      = (*search_in_linear_hashmap<8>(all_cl, i)).second;
+            auto& curr_buff_all_cl = (*search_in_linear_hashmap<int, std::vector<double>,  8>(buff_all_cl, i)).second;
+            auto& curr_all_cl      = (*search_in_linear_hashmap<int, std::vector<Point_3>, 8>(all_cl, i)).second;
             curr_buff_all_cl.resize(3*N);
             curr_all_cl.resize(N);
             comm.second.Allgather(my_cl.data(), 3, MPI_DOUBLE, curr_buff_all_cl.data(), 3, MPI_DOUBLE, i);
@@ -209,11 +209,9 @@ public:
         ElementCount e;
         Load max_load, avg_load, my_load;
         Imbalance global, mine;
-
         LoadStatistics(ElementCount e, Load maxl, Load avgl, Load myl, Imbalance global, Imbalance mine):
             e(e), max_load(maxl), avg_load(avgl), my_load(myl), global(global), mine(mine), std::tuple<ElementCount, Load, Load, Imbalance, Imbalance>(e, maxl, avgl, global, mine){}
     };
-
 
     template<class LoadComputer, class A>
     LoadStatistics get_load_statistics(const std::vector<A>& elements, MPI_Comm neighborhood = MPI_COMM_WORLD){
@@ -231,7 +229,7 @@ public:
 
     template<class CartesianPointTransformer, class LoadComputer, class A>
     std::vector<std::pair<ProcRank, std::vector<DataIndex>>> move_vertices(
-            std::vector<A>& elements, MPI_Datatype datatype, double avg_load, double mu = 1.0, MPI_Comm neighborhood = MPI_COMM_WORLD) {
+            std::vector<A>& elements, MPI_Datatype datatype, double avg_load, LinearHashMap<int, double, 8> vertex_mu, MPI_Comm neighborhood = MPI_COMM_WORLD) {
 
         get_MPI_rank(my_rank);
         LoadComputer lc;
@@ -246,16 +244,15 @@ public:
 
         int N; MPI_Comm_size(neighborhood, &N);
 
-        //auto all_loads = get_neighbors_load(my_load, neighbor_list, vertex_neighborhood); //global load balancing with MPI_COMM_WORLD
-
+        auto all_loads = get_neighbors_load(my_load, neighbor_list, vertex_neighborhood); //global load balancing with MPI_COMM_WORLD
 
         auto center_of_load = get_center_of_load(weights, points);
 
-        std::array<std::pair<VertIndex, std::vector<Point_3>>, 8> all_cl = spread_centers_of_load(center_of_load, vertex_neighborhood);
+        LinearHashMap<VertIndex, std::vector<Point_3>, 8> all_cl = spread_centers_of_load(center_of_load, vertex_neighborhood);
 
         std::vector<int> vertex_local_id_to_move = {0, 1, 2, 3, 4, 5, 6, 7, 8};
 
-        const auto original_mu = mu;
+
         const int MAX_TRIAL    = 3;
         unsigned int iteration = 0;
         // move the vertices, keep valid geometry among neighbors of a given vertex
@@ -265,21 +262,24 @@ public:
                       (((unsigned int) coord.y()+y) & 1)*2+
                       (((unsigned int) coord.z()+z) & 1)*4;
 
-            //if(communicator.comm_size > 1)
+            auto v   = vertices[com];
+            auto vid = vertices_id[com];
+            const auto& communicator = vertex_neighborhood[vid];
+            std::vector<double> normalized_loads, loads = (*search_in_linear_hashmap<int, std::vector<double>, 8>(all_loads, vid)).second;
+            double mu = (*search_in_linear_hashmap<int, double, 8>(vertex_mu, vid)).second;
+            std::transform(loads.cbegin(), loads.cend(), std::back_inserter(normalized_loads), [&avg_load](auto n){return n/avg_load;});
+            auto cls = (*search_in_linear_hashmap<int, std::vector<Point_3>, 8>(all_cl, vid)).second;
+            auto f1  = -get_vertex_force(v, cls, normalized_loads);
+            auto f1_after = constraint_force(d, v, f1);
+
+            if(communicator.comm_size > 1)
                 for(int trial = 0; trial < MAX_TRIAL; ++trial) {
                     auto new_vertices = vertices;
-                    auto v   = vertices[com];
-                    auto vid = vertices_id[com];
-                    const auto& communicator = vertex_neighborhood[vid];
-                    std::vector<double> normalized_loads, loads = (*search_in_linear_hashmap<8, double>(all_loads, vid)).second;
-                    std::transform(loads.cbegin(), loads.cend(), std::back_inserter(normalized_loads), [&avg_load](auto n){return n/avg_load;});
-                    auto cls = (*search_in_linear_hashmap<8, Point_3>(all_cl, vid)).second;
-                    auto f1  = -get_vertex_force(v, cls, normalized_loads);
-                    auto f1_after = constraint_force(d, v, f1);
+
                     new_vertices[com] = move_vertex(v, f1_after, mu);
+
                     int valid = lb_isGeometryValid(new_vertices, get_planes(new_vertices), grid_size);
                     std::vector<int> allValid(communicator.comm_size);
-
                     communicator.Allgather(&valid, 1, MPI_INT, allValid.data(), 1, MPI_INT, vid);
                     int are_all_valid = std::accumulate(allValid.begin(),allValid.end(),1,[](auto k,auto v){return k*v;});
                     if(are_all_valid) {
@@ -291,8 +291,6 @@ public:
                     }
                 }
             iteration++;
-            mu = original_mu;
-
         }
 
         //*******************************************************
@@ -359,7 +357,7 @@ public:
                                  [&close_plane](const Plane_3& p){return p == close_plane;});
                          if(found) break;
                     }
-                    if(found) { //add to ghost data for this proc
+                    if(found) { // add to ghost data for this proc
                         neighbor_ghosts[nid].second.push_back(data_id);
                     }
                 }
@@ -454,8 +452,6 @@ public:
             Communicator c(n_list);
             vertex_neighborhood[vid] = c;
         }
-
-
     }
 
     friend std::ostream &operator<<(std::ostream &os, const Partition &partition) {

@@ -165,4 +165,5 @@ public:
 
 };
 
+
 #endif //ADLBIRREG_COMMUNICATOR_HPP
