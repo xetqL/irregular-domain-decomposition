@@ -1,4 +1,5 @@
 container:
   image: gcc:latest
 task:     
+  cmake_script: sudo apt install -y cmake
   tests_script: cmake . && make && make tests
