@@ -3,9 +3,9 @@ dist: bionic
 language: cpp
 
 before_install:
-  - sudo apt-get -y install libcgal-dev
+  - sudo apt-get -y install libcgal-dev openmpi cmake gcc make
 
-install: gcc make cmake
+#install: gcc make cmake
 
 compiler: gcc
 
