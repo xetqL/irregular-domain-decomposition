@@ -4,7 +4,8 @@
 
 #include <gtest/gtest.h>
 
-namespace {
+namespace
+{
 
 #include <string>
 using std::string;
@@ -20,7 +21,8 @@ TEST(StrCompare, CStrEqual) {
 TEST(StrCompare, CStrNotEqual) {
     EXPECT_STREQ(expectVal, actualValTrue);
 }
-}
+
+} //end of namespace
 
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
