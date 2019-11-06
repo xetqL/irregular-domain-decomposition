@@ -13,4 +13,5 @@ cmake-build-debug
 *.cbp
 CMakeCache.txt
 bin
+.idea
 
