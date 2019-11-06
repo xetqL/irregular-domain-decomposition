@@ -1,27 +1,24 @@
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.15)
 
 project(adlbirreg)
 
 set(CMAKE_CXX_STANDARD 14)
-
 include_directories(/home/xetql/eigen-eigen-323c052e1731)
 
-find_package(MPI REQUIRED)
+include(FetchContent)
+FetchContent_Declare(
+        googletest
+        GIT_REPOSITORY https://github.com/google/googletest.git
+        GIT_TAG        release-1.8.0
+)
+FetchContent_GetProperties(googletest)
+if(NOT googletest_POPULATED)
+    FetchContent_Populate(googletest)
+    add_subdirectory(${googletest_SOURCE_DIR} ${googletest_BINARY_DIR})
+endif()
 
-set(CMAKE_CXX_COMPILER ${MPI_CXX_COMPILER} )
+enable_testing()
 
-find_package(CGAL REQUIRED)
-
-include(${CGAL_USE_FILE})
-
-include_directories(SYSTEM ${MPI_INCLUDE_PATH})
-
-add_executable(adlbirreg main.cpp Communicator.hpp Partition.cpp Partition.hpp GeometricUtils.hpp Domain.cpp Domain.hpp Cell.cpp Cell.hpp Utils.hpp GeometricUtils.cpp Communicator.cpp Utils.cpp DiffusiveOptimizer.cpp DiffusiveOptimizer.hpp)
-
-add_executable(test_communcation comm.cpp Communicator.hpp)
-
-target_link_libraries(adlbirreg ${CGAL_LIBS})
-
-target_link_libraries(adlbirreg ${MPI_C_LIBRARIES})
-
-target_link_libraries(test_communcation ${MPI_C_LIBRARIES})
+include_directories(include)
+add_subdirectory(test)
+add_subdirectory(src)

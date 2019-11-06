@@ -5,7 +5,7 @@
 		<Option title="adlbirreg"/>
 		<Option makefile_is_custom="1"/>
 		<Option compiler="gcc"/>
-		<Option virtualFolders="CMake Files\;CMake Files\..\;CMake Files\..\..\;CMake Files\..\..\..\;CMake Files\..\..\..\..\;CMake Files\..\..\..\..\..\;CMake Files\..\..\..\..\..\usr\;CMake Files\..\..\..\..\..\usr\lib64\;CMake Files\..\..\..\..\..\usr\lib64\cmake\;CMake Files\..\..\..\..\..\usr\lib64\cmake\CGAL\;CMake Files\..\..\..\..\..\usr\lib\;CMake Files\..\..\..\..\..\usr\lib\cmake\;CMake Files\..\..\..\..\..\usr\lib\cmake\CGAL\;CMake Files\..\..\..\..\..\usr\lib\cmake\CGAL\config\;CMake Files\..\..\..\..\..\usr\lib\cmake\CGAL\config\support\;"/>
+		<Option virtualFolders="CMake Files\;CMake Files\_deps\;CMake Files\_deps\googletest-src\;CMake Files\_deps\googletest-src\googlemock\;CMake Files\_deps\googletest-src\googletest\;CMake Files\_deps\googletest-src\googletest\cmake\;CMake Files\test\;CMake Files\src\;CMake Files\..\;CMake Files\..\..\;CMake Files\..\..\..\;CMake Files\..\..\..\..\;CMake Files\..\..\..\..\..\;CMake Files\..\..\..\..\..\usr\;CMake Files\..\..\..\..\..\usr\lib64\;CMake Files\..\..\..\..\..\usr\lib64\cmake\;CMake Files\..\..\..\..\..\usr\lib64\cmake\CGAL\;CMake Files\..\..\..\..\..\usr\lib\;CMake Files\..\..\..\..\..\usr\lib\cmake\;CMake Files\..\..\..\..\..\usr\lib\cmake\CGAL\;CMake Files\..\..\..\..\..\usr\lib\cmake\CGAL\config\;CMake Files\..\..\..\..\..\usr\lib\cmake\CGAL\config\support\;"/>
 		<Build>
 			<Target title="all">
 				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
@@ -17,11 +17,21 @@
 					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
 				</MakeCommands>
 			</Target>
-			<Target title="rebuild_cache">
+			<Target title="install/strip">
 				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
 				<Option type="4"/>
 				<MakeCommands>
-					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 rebuild_cache"/>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 install/strip"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="install/local">
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 install/local"/>
 					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
 					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
 					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
@@ -37,47 +47,237 @@
 					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
 				</MakeCommands>
 			</Target>
-			<Target title="adlbirreg">
-				<Option output="/home/xetql/projects/cpp/irregular-domain-decomposition/adlbirreg" prefix_auto="0" extension_auto="0"/>
+			<Target title="test">
 				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
-				<Option object_output="./"/>
-				<Option type="1"/>
-				<Option compiler="gcc"/>
-				<Compiler>
-					<Add option="-DCGAL_USE_MPFR"/>
-					<Add option="-DCGAL_USE_GMP"/>
-					<Add directory="/home/xetql/eigen-eigen-323c052e1731"/>
-					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
-				</Compiler>
+				<Option type="4"/>
 				<MakeCommands>
-					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 adlbirreg"/>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 test"/>
 					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
 					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
 					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
 				</MakeCommands>
 			</Target>
-			<Target title="adlbirreg/fast">
-				<Option output="/home/xetql/projects/cpp/irregular-domain-decomposition/adlbirreg" prefix_auto="0" extension_auto="0"/>
+			<Target title="rebuild_cache">
 				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 rebuild_cache"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="list_install_components">
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 list_install_components"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="install">
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 install"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="gmock_main">
+				<Option output="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/libgmock_main.a" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock"/>
+				<Option object_output="./"/>
+				<Option type="2"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/home/xetql/eigen-eigen-323c052e1731"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googlemock/include"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googlemock"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googletest/include"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googletest"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/Makefile&quot;  VERBOSE=1 gmock_main"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="gmock_main/fast">
+				<Option output="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/libgmock_main.a" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock"/>
+				<Option object_output="./"/>
+				<Option type="2"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/home/xetql/eigen-eigen-323c052e1731"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googlemock/include"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googlemock"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googletest/include"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googletest"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/Makefile&quot;  VERBOSE=1 gmock_main/fast"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="gmock">
+				<Option output="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/libgmock.a" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock"/>
+				<Option object_output="./"/>
+				<Option type="2"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/home/xetql/eigen-eigen-323c052e1731"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googlemock/include"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googlemock"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googletest/include"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googletest"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/Makefile&quot;  VERBOSE=1 gmock"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="gmock/fast">
+				<Option output="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/libgmock.a" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock"/>
+				<Option object_output="./"/>
+				<Option type="2"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/home/xetql/eigen-eigen-323c052e1731"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googlemock/include"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googlemock"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googletest/include"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googletest"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/Makefile&quot;  VERBOSE=1 gmock/fast"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="gtest_main">
+				<Option output="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest/libgtest_main.a" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest"/>
+				<Option object_output="./"/>
+				<Option type="2"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/home/xetql/eigen-eigen-323c052e1731"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googletest/include"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googletest"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest/Makefile&quot;  VERBOSE=1 gtest_main"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="gtest_main/fast">
+				<Option output="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest/libgtest_main.a" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest"/>
+				<Option object_output="./"/>
+				<Option type="2"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/home/xetql/eigen-eigen-323c052e1731"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googletest/include"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googletest"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest/Makefile&quot;  VERBOSE=1 gtest_main/fast"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="gtest">
+				<Option output="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest/libgtest.a" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest"/>
+				<Option object_output="./"/>
+				<Option type="2"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/home/xetql/eigen-eigen-323c052e1731"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googletest/include"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googletest"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest/Makefile&quot;  VERBOSE=1 gtest"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="gtest/fast">
+				<Option output="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest/libgtest.a" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest"/>
+				<Option object_output="./"/>
+				<Option type="2"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/home/xetql/eigen-eigen-323c052e1731"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googletest/include"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googletest"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest/Makefile&quot;  VERBOSE=1 gtest/fast"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-build/googlemock/gtest/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="TestA">
+				<Option output="/home/xetql/projects/cpp/irregular-domain-decomposition/test/TestA" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition/test"/>
 				<Option object_output="./"/>
 				<Option type="1"/>
 				<Option compiler="gcc"/>
 				<Compiler>
-					<Add option="-DCGAL_USE_MPFR"/>
-					<Add option="-DCGAL_USE_GMP"/>
 					<Add directory="/home/xetql/eigen-eigen-323c052e1731"/>
-					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/include"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googletest/include"/>
 				</Compiler>
 				<MakeCommands>
-					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 adlbirreg/fast"/>
-					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
-					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
-					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/test/Makefile&quot;  VERBOSE=1 TestA"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/test/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/test/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/test/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="TestA/fast">
+				<Option output="/home/xetql/projects/cpp/irregular-domain-decomposition/test/TestA" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition/test"/>
+				<Option object_output="./"/>
+				<Option type="1"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/home/xetql/eigen-eigen-323c052e1731"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/include"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googletest/include"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/test/Makefile&quot;  VERBOSE=1 TestA/fast"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/test/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/test/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/test/Makefile&quot;  VERBOSE=1 clean"/>
 				</MakeCommands>
 			</Target>
 			<Target title="test_communcation">
-				<Option output="/home/xetql/projects/cpp/irregular-domain-decomposition/test_communcation" prefix_auto="0" extension_auto="0"/>
-				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
+				<Option output="/home/xetql/projects/cpp/irregular-domain-decomposition/bin/test_communcation" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition/bin"/>
 				<Option object_output="./"/>
 				<Option type="1"/>
 				<Option compiler="gcc"/>
@@ -85,18 +285,19 @@
 					<Add option="-DCGAL_USE_MPFR"/>
 					<Add option="-DCGAL_USE_GMP"/>
 					<Add directory="/home/xetql/eigen-eigen-323c052e1731"/>
-					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/include"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/src"/>
 				</Compiler>
 				<MakeCommands>
-					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 test_communcation"/>
-					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
-					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
-					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/src/Makefile&quot;  VERBOSE=1 test_communcation"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/src/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/src/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/src/Makefile&quot;  VERBOSE=1 clean"/>
 				</MakeCommands>
 			</Target>
 			<Target title="test_communcation/fast">
-				<Option output="/home/xetql/projects/cpp/irregular-domain-decomposition/test_communcation" prefix_auto="0" extension_auto="0"/>
-				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
+				<Option output="/home/xetql/projects/cpp/irregular-domain-decomposition/bin/test_communcation" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition/bin"/>
 				<Option object_output="./"/>
 				<Option type="1"/>
 				<Option compiler="gcc"/>
@@ -104,67 +305,123 @@
 					<Add option="-DCGAL_USE_MPFR"/>
 					<Add option="-DCGAL_USE_GMP"/>
 					<Add directory="/home/xetql/eigen-eigen-323c052e1731"/>
-					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/include"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/src"/>
 				</Compiler>
 				<MakeCommands>
-					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 test_communcation/fast"/>
-					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
-					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
-					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/Makefile&quot;  VERBOSE=1 clean"/>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/src/Makefile&quot;  VERBOSE=1 test_communcation/fast"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/src/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/src/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/src/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="adlbirreg">
+				<Option output="/home/xetql/projects/cpp/irregular-domain-decomposition/bin/adlbirreg" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition/bin"/>
+				<Option object_output="./"/>
+				<Option type="1"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add option="-DCGAL_USE_MPFR"/>
+					<Add option="-DCGAL_USE_GMP"/>
+					<Add directory="/home/xetql/eigen-eigen-323c052e1731"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/include"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/src"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/src/Makefile&quot;  VERBOSE=1 adlbirreg"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/src/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/src/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/src/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="adlbirreg/fast">
+				<Option output="/home/xetql/projects/cpp/irregular-domain-decomposition/bin/adlbirreg" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/home/xetql/projects/cpp/irregular-domain-decomposition/bin"/>
+				<Option object_output="./"/>
+				<Option type="1"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add option="-DCGAL_USE_MPFR"/>
+					<Add option="-DCGAL_USE_GMP"/>
+					<Add directory="/home/xetql/eigen-eigen-323c052e1731"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/include"/>
+					<Add directory="/home/xetql/projects/cpp/irregular-domain-decomposition/src"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/src/Makefile&quot;  VERBOSE=1 adlbirreg/fast"/>
+					<CompileFile command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/src/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/src/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -f &quot;/home/xetql/projects/cpp/irregular-domain-decomposition/src/Makefile&quot;  VERBOSE=1 clean"/>
 				</MakeCommands>
 			</Target>
 		</Build>
-		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/Cell.cpp">
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googlemock/src/gmock-all.cc">
+			<Option target="gmock_main"/>
+			<Option target="gmock"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googlemock/src/gmock_main.cc">
+			<Option target="gmock_main"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googletest/src/gtest-all.cc">
+			<Option target="gmock_main"/>
+			<Option target="gmock"/>
+			<Option target="gtest"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googletest/src/gtest_main.cc">
+			<Option target="gtest_main"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/src/Cell.cpp">
 			<Option target="adlbirreg"/>
 		</Unit>
-		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/Cell.hpp">
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/src/Communicator.cpp">
+			<Option target="test_communcation"/>
 			<Option target="adlbirreg"/>
 		</Unit>
-		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/Communicator.cpp">
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/src/DiffusiveOptimizer.cpp">
 			<Option target="adlbirreg"/>
 		</Unit>
-		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/Communicator.hpp">
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/src/Domain.cpp">
 			<Option target="adlbirreg"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/src/GeometricUtils.cpp">
+			<Option target="adlbirreg"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/src/Partition.cpp">
+			<Option target="adlbirreg"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/src/Utils.cpp">
+			<Option target="adlbirreg"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/src/comm.cpp">
 			<Option target="test_communcation"/>
 		</Unit>
-		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/DiffusiveOptimizer.cpp">
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/src/main.cpp">
 			<Option target="adlbirreg"/>
 		</Unit>
-		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/DiffusiveOptimizer.hpp">
-			<Option target="adlbirreg"/>
-		</Unit>
-		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/Domain.cpp">
-			<Option target="adlbirreg"/>
-		</Unit>
-		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/Domain.hpp">
-			<Option target="adlbirreg"/>
-		</Unit>
-		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/GeometricUtils.cpp">
-			<Option target="adlbirreg"/>
-		</Unit>
-		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/GeometricUtils.hpp">
-			<Option target="adlbirreg"/>
-		</Unit>
-		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/Partition.cpp">
-			<Option target="adlbirreg"/>
-		</Unit>
-		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/Partition.hpp">
-			<Option target="adlbirreg"/>
-		</Unit>
-		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/Utils.cpp">
-			<Option target="adlbirreg"/>
-		</Unit>
-		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/Utils.hpp">
-			<Option target="adlbirreg"/>
-		</Unit>
-		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/comm.cpp">
-			<Option target="test_communcation"/>
-		</Unit>
-		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/main.cpp">
-			<Option target="adlbirreg"/>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/test/test1.cpp">
+			<Option target="TestA"/>
 		</Unit>
 		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/CMakeLists.txt">
 			<Option virtualFolder="CMake Files\"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\_deps\googletest-src\"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googlemock/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\_deps\googletest-src\googlemock\"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googletest/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\_deps\googletest-src\googletest\"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/_deps/googletest-src/googletest/cmake/internal_utils.cmake">
+			<Option virtualFolder="CMake Files\_deps\googletest-src\googletest\cmake\"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/test/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\test\"/>
+		</Unit>
+		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/src/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\src\"/>
 		</Unit>
 		<Unit filename="/home/xetql/projects/cpp/irregular-domain-decomposition/../../../../../usr/lib64/cmake/CGAL/CGALConfig.cmake">
 			<Option virtualFolder="CMake Files\..\..\..\..\..\usr\lib64\cmake\CGAL\"/>
