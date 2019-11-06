@@ -145,7 +145,7 @@ int main() {
     auto all_loads = get_neighbors_load(stats.my_load, MPI_COMM_WORLD); //global load balancing with MPI_COMM_WORLD
     auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / world_size;
     lb::DiffusiveOptimizer<lb::GridPointTransformer, lb::GridElementComputer, Cell> diff_opt;
-
+    diff_opt.optimize(part, my_cells, datatype_wrapper.element_datatype, 1.0);
     /*for(int j = 0; j < 50; ++j){
         auto data = part.move_vertices<lb::GridPointTransformer, lb::GridElementComputer, Cell>(my_cells, datatype_wrapper.element_datatype, avg_load, mu);
         stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
