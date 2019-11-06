@@ -1,0 +1,16 @@
+dist: bionic
+
+language: cpp
+
+before_install:
+  - sudo apt-get -y install libcgal-dev
+
+install: gcc make cmake
+
+compiler: gcc
+
+before_script: cmake .
+
+script:
+  - make
+  - make test

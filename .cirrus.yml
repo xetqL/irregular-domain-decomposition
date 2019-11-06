@@ -1,4 +1,0 @@
-container:
-  image: rikorose/gcc-cmake:latest
-task:     
-  tests_script: cmake . && make && make tests
