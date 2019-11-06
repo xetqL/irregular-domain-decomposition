@@ -1,8 +1,8 @@
-find_package(MPI REQUIRED)
+find_package(MPI)
 
 set(CMAKE_CXX_COMPILER ${MPI_CXX_COMPILER} )
 
-find_package(CGAL REQUIRED)
+find_package(CGAL)
 
 include(${CGAL_USE_FILE})
 
