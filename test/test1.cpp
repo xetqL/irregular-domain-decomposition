@@ -12,7 +12,7 @@ using std::string;
 
 const char *actualValTrue  = "hello gtest";
 const char *actualValFalse = "hello world";
-const char *expectVal      = "hello gtest";
+const char *expectVal      = "hello gtest2";
 
 TEST(StrCompare, CStrEqual) {
     EXPECT_STREQ(expectVal, actualValTrue);
