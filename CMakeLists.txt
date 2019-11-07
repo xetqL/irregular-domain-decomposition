@@ -20,6 +20,5 @@ endif()
 enable_testing()
 
 include_directories(include)
-add_subdirectory(extern/cgal)
 add_subdirectory(test)
 add_subdirectory(src)
