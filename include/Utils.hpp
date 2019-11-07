@@ -19,7 +19,7 @@ using LinearHashMap = std::array<std::pair<K, V>, N>;
 
 template<class K, class V, int N>
 typename LinearHashMap<K, V, N>::iterator
-search_in_linear_hashmap(std::array<std::pair<int, V>, N> &linmap, int key) {
+search_in_linear_hashmap(std::array<std::pair<K, V>, N> &linmap, K key) {
     //for(std::pair<int, std::vector<A>>& entry : linmap) {
     auto entry = linmap.begin();
     for (; entry != linmap.end(); entry++) {
@@ -77,15 +77,15 @@ get_neighbors_info(A my_info, MPI_Datatype datatype, const std::set<int> &neighb
     cnt = 0;
     for (const auto &v_comm : v_neighborhood) {
         const auto &comm_ranks = v_comm.second.get_ranks();
-        std::vector<double> loads;
+        std::vector<A> infos;
         int id_neighbor = 0;
         for (int neighbor_rank : neighbors) {
             if (std::find(comm_ranks.cbegin(), comm_ranks.cend(), neighbor_rank) != comm_ranks.cend()) { //in here?
-                loads.push_back(neighbors_load[id_neighbor]);
+                infos.push_back(neighbors_load[id_neighbor]);
             }
             id_neighbor++;
         }
-        neighborhoods_info[cnt] = std::make_pair(v_comm.first, loads);
+        neighborhoods_info[cnt] = std::make_pair(v_comm.first, infos);
         cnt++;
     }
     return neighborhoods_info;

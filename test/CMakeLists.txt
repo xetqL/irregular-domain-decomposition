@@ -1,5 +1,19 @@
-add_executable(TestA test1.cpp)
+find_package(MPI)
 
-target_link_libraries(TestA gtest_main)
+set(CMAKE_CXX_COMPILER ${MPI_CXX_COMPILER})
 
-add_test(TestA "${PROJECT_SOURCE_DIR}/test/TestA")
+find_package(CGAL)
+
+include(${CGAL_USE_FILE})
+
+include_directories(SYSTEM ${MPI_INCLUDE_PATH})
+
+add_executable(TestLinearHashMapUtils TestLinearHashMapUtils.cpp ../src/Utils.cpp ../src/Communicator.cpp ../src/GeometricUtils.cpp)
+
+target_link_libraries(TestLinearHashMapUtils gtest_main)
+
+add_test(TestLinearHashMapUtils "${PROJECT_SOURCE_DIR}/test/TestLinearHashMapUtils")
+
+target_link_libraries(TestLinearHashMapUtils ${CGAL_LIBS})
+
+target_link_libraries(TestLinearHashMapUtils ${MPI_C_LIBRARIES})

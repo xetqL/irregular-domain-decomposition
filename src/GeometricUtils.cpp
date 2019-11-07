@@ -29,31 +29,7 @@ Vector_3 constraint_force(const Box3& d, const Point_3& p, const Vector_3& f){
     }
     return Vector_3(fx, fy, fz);
 }
-double lb_getTetraederVolumeIndexed(int c1, int c2, int c3, int c4, const std::array<Point_3, 8>& vertices) {
-    double dir1_0, dir1_1, dir1_2;
-    double dir2_0, dir2_1, dir2_2;
-    double dir3_0, dir3_1, dir3_2;
 
-    dir1_0 = vertices[c2].x() - vertices[c1].x();
-    dir1_1 = vertices[c2].y() - vertices[c1].y();
-    dir1_2 = vertices[c2].z() - vertices[c1].z();
-
-    dir2_0 = vertices[c3].x() - vertices[c1].x();
-    dir2_1 = vertices[c3].y() - vertices[c1].y();
-    dir2_2 = vertices[c3].z() - vertices[c1].z();
-
-    dir3_0 = vertices[c4].x() - vertices[c1].x();
-    dir3_1 = vertices[c4].y() - vertices[c1].y();
-    dir3_2 = vertices[c4].z() - vertices[c1].z();
-
-    return (dir1_0 * (dir3_1 * dir2_2 - dir3_2 * dir2_1) +
-            dir1_1 * (dir3_2 * dir2_0 - dir3_0 * dir2_2) +
-            dir1_2 * (dir3_0 * dir2_1 - dir3_1 * dir2_0));
-}
-bool in_tetrahedron(const Tetrahedron_3& tet, const Point_3& p){
-    auto side = tet.bounded_side(p);
-    return side == CGAL::ON_BOUNDED_SIDE || side == CGAL::ON_BOUNDARY;
-}
 std::array<Plane_3, 12> get_planes(const std::array<Point_3, 8>& vertices){
     return {
             //front face

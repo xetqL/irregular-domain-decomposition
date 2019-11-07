@@ -87,7 +87,7 @@ int main() {
 
     lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z);
 
-    d.grid_cell_size = 0.1;
+    d.grid_cell_size = 0.5;
 
     Cell::get_msx() = DOMAIN_SIZE_X / d.grid_cell_size;
     Cell::get_msy() = DOMAIN_SIZE_Y / d.grid_cell_size;
@@ -135,10 +135,10 @@ int main() {
     auto stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
 
     if(!my_rank) print_load_statitics(stats);
-    for(int i = 0; i < world_size; ++i){
+    /*for(int i = 0; i < world_size; ++i){
         if(my_rank == i) io::scatterplot_3d_output<lb::GridPointTransformer>(i, "debug-domain-decomposition-"+std::to_string(0)+".dat", my_cells);
         MPI_Barrier(MPI_COMM_WORLD);
-    }
+    }*/
     auto prev_imbalance = stats.global;
     double mu = 1.0;
 
@@ -146,17 +146,20 @@ int main() {
     auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / world_size;
     lb::DiffusiveOptimizer<lb::GridPointTransformer, lb::GridElementComputer, Cell> diff_opt;
     diff_opt.optimize(part, my_cells, datatype_wrapper.element_datatype, 1.0);
-    /*for(int j = 0; j < 50; ++j){
-        auto data = part.move_vertices<lb::GridPointTransformer, lb::GridElementComputer, Cell>(my_cells, datatype_wrapper.element_datatype, avg_load, mu);
-        stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
+    stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
+    if(!my_rank)
+        print_load_statitics(stats);
+    /*std::vector<double> all_mu(8, mu);
+    LinearHashMap<int, double, 8> vertices_mu;
+    std::zip(part.vertices_id.begin(), part.vertices_id.end(), all_mu.begin(), all_mu.end(), vertices_mu.begin());
+    for(int j = 0; j < 2; ++j){
+        auto data = part.move_vertices<lb::GridPointTransformer, lb::GridElementComputer, Cell>(my_cells, datatype_wrapper.element_datatype, avg_load, vertices_mu);
         if(prev_imbalance <= stats.global) mu *= 0.9;
         prev_imbalance = stats.global;
+
+        stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
         if(!my_rank)
             print_load_statitics(stats);
-        for(int i = 0; i < world_size; ++i) {
-            if(my_rank == i) io::scatterplot_3d_output<lb::GridPointTransformer>(i, "debug-domain-decomposition-"+std::to_string(j+1)+".dat", my_cells);
-            MPI_Barrier(MPI_COMM_WORLD);
-        }
     }*/
 
     MPI_Finalize();

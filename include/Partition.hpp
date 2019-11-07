@@ -119,12 +119,12 @@ public:
         return min_distance <= (std::sqrt(3) * grid_size);
     }
 
-    std::vector<Plane_3> find_planes_closer_than(const std::array<Plane_3, 12>& planes, const Point_3& p, double cut_off) {
+    inline std::vector<Plane_3> find_planes_closer_than(const std::array<Plane_3, 12>& planes, const Point_3& p, double cut_off) {
         std::array<double, 12> distances_to_plane;
-        std::transform(planes.cbegin(), planes.cend(), distances_to_plane.begin(), [&p](Plane_3 plane){return std::sqrt(CGAL::squared_distance(p, plane));});
+        std::transform(planes.cbegin(), planes.cend(), distances_to_plane.begin(), [&p](Plane_3 plane){return CGAL::squared_distance(p, plane);});
         std::vector<Plane_3> closest_planes;
         for(int i = 0; i < 12; ++i) {
-            if(distances_to_plane[i] <= cut_off) closest_planes.push_back(planes[i]);
+            if(distances_to_plane[i] <= cut_off*cut_off) closest_planes.push_back(planes[i]);
         }
         return closest_planes;
     }
@@ -252,7 +252,6 @@ public:
 
         std::vector<int> vertex_local_id_to_move = {0, 1, 2, 3, 4, 5, 6, 7, 8};
 
-
         const int MAX_TRIAL    = 3;
         unsigned int iteration = 0;
         // move the vertices, keep valid geometry among neighbors of a given vertex
@@ -271,13 +270,10 @@ public:
             auto cls = (*search_in_linear_hashmap<int, std::vector<Point_3>, 8>(all_cl, vid)).second;
             auto f1  = -get_vertex_force(v, cls, normalized_loads);
             auto f1_after = constraint_force(d, v, f1);
-
             if(communicator.comm_size > 1)
                 for(int trial = 0; trial < MAX_TRIAL; ++trial) {
                     auto new_vertices = vertices;
-
                     new_vertices[com] = move_vertex(v, f1_after, mu);
-
                     int valid = lb_isGeometryValid(new_vertices, get_planes(new_vertices), grid_size);
                     std::vector<int> allValid(communicator.comm_size);
                     communicator.Allgather(&valid, 1, MPI_INT, allValid.data(), 1, MPI_INT, vid);
@@ -348,7 +344,7 @@ public:
             bool is_real_cell = this->contains(point);
 
             auto closest_planes = find_planes_closer_than(planes, point, sqrt_3*grid_size);
-            if(closest_planes.size() > 0 && is_real_cell) { // IS A NEIGHBORING CELL, i will move it to the proc that share the closest planes
+            /*if(closest_planes.size() > 0 && is_real_cell) { // IS A NEIGHBORING CELL, i will move it to the proc that share the closest planes
                 for(int nid = 0; nid < number_of_neighbors; ++nid) {
                     const auto& neighborhood_domains = neighborhoods[nid];
                     bool found = false;
@@ -361,7 +357,7 @@ public:
                         neighbor_ghosts[nid].second.push_back(data_id);
                     }
                 }
-            } else if(!is_real_cell){ // transfer data to neighbor
+            } else*/ if(!is_real_cell){ // transfer data to neighbor
                 //throw std::runtime_error("?");
                 for(int nid = 0; nid < number_of_neighbors; ++nid) {
                     const auto  neighbor_rank = migration_and_destination[nid].first;
