@@ -1,5 +1,7 @@
 find_package(MPI)
 
+set(CMAKE_LIBRARY_PATH ${CMAKE_LIBRARY_PATH} /opt/)
+
 set(CMAKE_CXX_COMPILER ${MPI_CXX_COMPILER})
 
 find_package(CGAL)
