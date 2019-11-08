@@ -42,6 +42,7 @@ public:
            [](std::pair<int, std::vector<int>> statuses) {
                return std::make_pair(statuses.first, std::any_of(statuses.second.cbegin(), statuses.second.cend(), [](int status){return status;}));
            });
+
         auto remaining_it = (int) std::cbrt(worldsize) - 2;
         get_MPI_rank(my_rank);
         while(remaining_it > 0 || std::accumulate(vertices_remaining_trials.begin(), vertices_remaining_trials.end(), 0, [](int sum, auto rm) {return rm.second;}) > 0) {

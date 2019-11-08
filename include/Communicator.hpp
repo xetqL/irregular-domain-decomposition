@@ -10,6 +10,7 @@
 #include <vector>
 #include <cmath>
 #include <assert.h>
+#include <map>
 
 #define get_MPI_rank(rank_var)\
     int rank_var;\
