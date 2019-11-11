@@ -29,9 +29,10 @@ public:
                 [](auto id){return std::make_pair(id, 10000.0);});
         std::zip(part.vertices_id.begin(), part.vertices_id.end(), all_mu.begin(), all_mu.end(), vertices_mu.begin());
 
+        auto remaining_it = (int) std::cbrt(worldsize) - 2;
         LinearHashMap <int, int,  8> vertices_remaining_trials;
         std::transform(part.vertices_id.begin(), part.vertices_id.end(), vertices_remaining_trials.begin(),
-                       [](auto id){return std::make_pair(id, 3);});
+                       [](auto id){return std::make_pair(id, remaining_it*remaining_it);});
         LinearHashMap <int, bool, 8> vertices_status; //active = true, inactive = false
         std::transform(part.vertices_id.begin(), part.vertices_id.end(), vertices_status.begin(),
                        [](auto id){return std::make_pair(id, true);});
@@ -43,7 +44,7 @@ public:
                return std::make_pair(statuses.first, std::any_of(statuses.second.cbegin(), statuses.second.cend(), [](int status){return status;}));
            });
 
-        auto remaining_it = (int) std::cbrt(worldsize) - 2;
+
 
         get_MPI_rank(my_rank);
         while(remaining_it > 0 || std::accumulate(vertices_remaining_trials.begin(), vertices_remaining_trials.end(), 0, [](int sum, auto rm) {return rm.second;}) > 0) {
