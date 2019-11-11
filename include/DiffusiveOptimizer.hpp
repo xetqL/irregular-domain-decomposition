@@ -44,6 +44,7 @@ public:
            });
 
         auto remaining_it = (int) std::cbrt(worldsize) - 2;
+
         get_MPI_rank(my_rank);
         while(remaining_it > 0 || std::accumulate(vertices_remaining_trials.begin(), vertices_remaining_trials.end(), 0, [](int sum, auto rm) {return rm.second;}) > 0) {
             part.move_vertices<GridPointTransformer, GridElementComputer, Cell>(my_cells, datatype, avg_load, vertices_mu);

@@ -71,8 +71,8 @@ void print_load_statitics(lb::Partition::LoadStatistics stats){
                "\n===============================================" << std::endl;
 }
 
-int main() {
-    MPI_Init(nullptr, nullptr);
+int main(int argc, char** argv) {
+    MPI_Init(&argc, &argv);
 
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
@@ -87,7 +87,7 @@ int main() {
 
     lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z);
 
-    d.grid_cell_size = 0.5;
+    d.grid_cell_size = std::atof(argv[1]);
 
     Cell::get_msx() = DOMAIN_SIZE_X / d.grid_cell_size;
     Cell::get_msy() = DOMAIN_SIZE_Y / d.grid_cell_size;
@@ -144,8 +144,11 @@ int main() {
 
     auto all_loads = get_neighbors_load(stats.my_load, MPI_COMM_WORLD); //global load balancing with MPI_COMM_WORLD
     auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / world_size;
+
     lb::DiffusiveOptimizer<lb::GridPointTransformer, lb::GridElementComputer, Cell> diff_opt;
+
     diff_opt.optimize(part, my_cells, datatype_wrapper.element_datatype, 1.0);
+
     stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
     if(!my_rank)
         print_load_statitics(stats);
