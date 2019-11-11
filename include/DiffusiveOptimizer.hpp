@@ -29,7 +29,7 @@ public:
                 [](auto id){return std::make_pair(id, 10000.0);});
         std::zip(part.vertices_id.begin(), part.vertices_id.end(), all_mu.begin(), all_mu.end(), vertices_mu.begin());
 
-        auto remaining_it = (int) std::cbrt(worldsize) - 2;
+        auto remaining_it = (int) std::cbrt(worldsize);
         LinearHashMap <int, int,  8> vertices_remaining_trials;
         std::transform(part.vertices_id.begin(), part.vertices_id.end(), vertices_remaining_trials.begin(),
                        [&remaining_it](auto id){return std::make_pair(id, 5*5);});
