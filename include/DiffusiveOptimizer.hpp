@@ -45,7 +45,7 @@ public:
            });
 
         get_MPI_rank(my_rank);
-        while((remaining_it*remaining_it) > 0 || std::accumulate(vertices_remaining_trials.begin(), vertices_remaining_trials.end(), 0, [](int sum, auto rm) {return sum + rm.second;}) > 0) {
+        while((remaining_it) > 0 || std::accumulate(vertices_remaining_trials.begin(), vertices_remaining_trials.end(), 0, [](int sum, auto rm) {return sum + rm.second;}) > 0) {
             std::cout << my_rank << " has "<< remaining_it <<" remaining it and "
             << std::accumulate(vertices_remaining_trials.begin(), vertices_remaining_trials.end(), 0, [](int sum, auto rm) {return sum + rm.second;}) << " active vertices" <<  std::endl;
             part.move_vertices<GridPointTransformer, GridElementComputer, Cell>(my_cells, datatype, avg_load, vertices_mu);
