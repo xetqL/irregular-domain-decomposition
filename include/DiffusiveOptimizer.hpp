@@ -44,17 +44,15 @@ public:
                return std::make_pair(statuses.first, std::any_of(statuses.second.cbegin(), statuses.second.cend(), [](int status){return status;}));
            });
 
-
-
         get_MPI_rank(my_rank);
-        while(remaining_it > 0 || std::accumulate(vertices_remaining_trials.begin(), vertices_remaining_trials.end(), 0, [](int sum, auto rm) {return rm.second;}) > 0) {
+        while((remaining_it*remaining_it) > 0 || std::accumulate(vertices_remaining_trials.begin(), vertices_remaining_trials.end(), 0, [](int sum, auto rm) {return rm.second;}) > 0) {
             part.move_vertices<GridPointTransformer, GridElementComputer, Cell>(my_cells, datatype, avg_load, vertices_mu);
             my_load = lc.compute_load(my_cells);
             auto neighbors_load  = get_neighbors_info(my_load,  MPI_DOUBLE, part.neighbor_list, part.vertex_neighborhood);
             for(int vid : part.vertices_id) {
-                bool& vertex_status   = (*search_in_linear_hashmap<int, bool, 8>(strategy, vid)).second;
+                bool& vertex_status   = (*search_in_linear_hashmap<int, bool,   8>(strategy, vid)).second;
                 double& vertex_mu     = (*search_in_linear_hashmap<int, double, 8>(vertices_mu, vid)).second;
-                int& vertex_rem_trial = (*search_in_linear_hashmap<int, int, 8>(vertices_remaining_trials, vid)).second;
+                int& vertex_rem_trial = (*search_in_linear_hashmap<int, int,    8>(vertices_remaining_trials, vid)).second;
                 if(vertex_status || vertex_rem_trial > 0) {
                     auto current_neighborhood_load = (*search_in_linear_hashmap<int, std::vector<double>, 8>(neighbors_load, vid)).second;
                     double imbalance   = (*std::max_element(current_neighborhood_load.cbegin(), current_neighborhood_load.cend()) / avg_load) - 1.0;
@@ -64,7 +62,6 @@ public:
                     vertex_status = false;
                 } else {
                     vertex_rem_trial--;
-                    vertex_mu *= 0.9;
                 }
             }
             remaining_it--;
