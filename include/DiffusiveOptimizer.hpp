@@ -24,15 +24,12 @@ public:
         MPI_Allreduce(&my_load, &max_load, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
         double avg_load = max_load / (double) worldsize;
         auto neighbors_load  = get_neighbors_info(my_load,  MPI_DOUBLE, part.neighbor_list, part.vertex_neighborhood);
-
+        std::vector<double> imbalances(8);
+        std::transform(neighbors_load.begin(), neighbors_load.end(), imbalances.begin(),
+                       [avg_load](auto vals){ return 1000.0; });//(*std::max_element(vals.second.cbegin(), vals.second.cend()) / avg_load) - 1.0; });
         LinearHashMap<int, double, 8> vertices_mu;
         LinearHashMap<int, double, 8> previous_imbalance;
-        std::transform(neighbors_load.begin(), neighbors_load.end(), previous_imbalance.begin(),
-                [avg_load](auto vals){ return (*std::max_element(vals.cbegin(), vals.cend()) / avg_load) - 1.0; });
-        std::transform(part.vertices_id.begin(), part.vertices_id.end(), previous_imbalance.begin(),
-                [](auto id){return std::make_pair(id, 10000.0);});
-        std::zip(part.vertices_id.begin(), part.vertices_id.end(), all_mu.begin(), all_mu.end(), vertices_mu.begin());
-
+        std::zip(part.vertices_id.begin(), part.vertices_id.end(), imbalances.begin(), imbalances.end(), previous_imbalance.begin());
         auto remaining_it = (int) std::cbrt(worldsize) ;
         LinearHashMap <int, int,  8> vertices_remaining_trials;
         std::transform(part.vertices_id.begin(), part.vertices_id.end(), vertices_remaining_trials.begin(),
@@ -56,13 +53,14 @@ public:
             my_load = lc.compute_load(my_cells);
             neighbors_load  = get_neighbors_info(my_load,  MPI_DOUBLE, part.neighbor_list, part.vertex_neighborhood);
             for(int vid : part.vertices_id) {
-                const bool vertex_status   = (*search_in_linear_hashmap<int, bool,   8>(strategy, vid)).second; //ulba or not
+                //const bool vertex_status   = (*search_in_linear_hashmap<int, bool,   8>(strategy, vid)).second; //ulba or not
                 int& vertex_rem_trial = (*search_in_linear_hashmap<int, int,    8>(vertices_remaining_trials, vid)).second; // stop or not
+                double& prev_imbl = (*search_in_linear_hashmap<int, double, 8>(previous_imbalance, vid)).second;
+
                 if(vertex_rem_trial > 0) { // if continue
                     //compute imbalance
                     auto current_neighborhood_load = (*search_in_linear_hashmap<int, std::vector<double>, 8>(neighbors_load, vid)).second;
                     double imbalance  = (*std::max_element(current_neighborhood_load.cbegin(), current_neighborhood_load.cend()) / avg_load) - 1.0;
-                    double& prev_imbl = (*search_in_linear_hashmap<int, double, 8>(previous_imbalance, vid)).second;
                     //new imbalance is good
                     if(imbalance < 0.2 || prev_imbl <= imbalance) {
                         vertex_rem_trial--;
@@ -71,9 +69,13 @@ public:
                         prev_imbl = imbalance;
                     }
                 }
+                std::cout << my_rank << " with vid "<< vid << " has "<< prev_imbl << " rt: " << vertex_rem_trial << std::endl;
+
             }
             remaining_it--;
+            MPI_Barrier(MPI_COMM_WORLD);
         }
+        std::cout << my_rank << " has left"<<std::endl;
     }
 };
 

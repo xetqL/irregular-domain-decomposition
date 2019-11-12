@@ -265,7 +265,8 @@ public:
             const int vertex_trial = (*search_in_linear_hashmap<int, int, 8>(vertices_trial, vid)).second;
             const auto& communicator = vertex_neighborhood[vid];
 
-            if(vertex_trial > 0 && communicator.comm_size > 1){
+            if(vertex_trial > 0 && communicator.comm_size > 1) {
+                std::cout << my_rank << " tries to move vertex " << vid << " with comm_size "<< communicator.comm_size<< std::endl;
                 std::vector<double> normalized_loads, loads = (*search_in_linear_hashmap<int, std::vector<double>, 8>(all_loads, vid)).second;
                 std::transform(loads.cbegin(), loads.cend(), std::back_inserter(normalized_loads), [&avg_load](auto n){return n/avg_load;});
                 auto cls = (*search_in_linear_hashmap<int, std::vector<Point_3>, 8>(all_cl, vid)).second;
@@ -319,6 +320,10 @@ public:
         std::vector<double> recv_buff(neighbor_list.size()*8*3);
         std::vector<MPI_Request> srequests(neighbor_list.size()), rrequests(neighbor_list.size());
 
+        //TODO: This creates a deadlock. People are leaving the parallel section, therefore, we should not spread domain
+        // data to every neighbors. Instead, we have to create the list of active neighbors as function of the vertex
+        // remaining trials array and the list of neighbors by vertex id from the communicator. Furthermore, we need a mock
+        // partition that respond false to every contains() call to avoid distinguishing active/inactive partition.
         {
             int i = 0;
             for(ProcRank neighbor_rank : neighbor_list) {
