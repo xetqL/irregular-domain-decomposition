@@ -229,7 +229,7 @@ public:
 
     template<class CartesianPointTransformer, class LoadComputer, class A>
     std::vector<std::pair<ProcRank, std::vector<DataIndex>>> move_vertices(
-            std::vector<A>& elements, MPI_Datatype datatype, double avg_load, LinearHashMap<int, double, 8> vertex_mu, MPI_Comm neighborhood = MPI_COMM_WORLD) {
+            std::vector<A>& elements, MPI_Datatype datatype, double avg_load, double mu, LinearHashMap<int, int, 8>& vertices_trial, MPI_Comm neighborhood = MPI_COMM_WORLD) {
 
         get_MPI_rank(my_rank);
         LoadComputer lc;
@@ -260,24 +260,25 @@ public:
             int com = (((unsigned int) coord.x()+x) & 1)  +
                       (((unsigned int) coord.y()+y) & 1)*2+
                       (((unsigned int) coord.z()+z) & 1)*4;
-
             auto v   = vertices[com];
             auto vid = vertices_id[com];
+            const int vertex_trial = (*search_in_linear_hashmap<int, int, 8>(vertices_trial, vid)).second;
             const auto& communicator = vertex_neighborhood[vid];
-            std::vector<double> normalized_loads, loads = (*search_in_linear_hashmap<int, std::vector<double>, 8>(all_loads, vid)).second;
-            double mu = (*search_in_linear_hashmap<int, double, 8>(vertex_mu, vid)).second;
-            std::transform(loads.cbegin(), loads.cend(), std::back_inserter(normalized_loads), [&avg_load](auto n){return n/avg_load;});
-            auto cls = (*search_in_linear_hashmap<int, std::vector<Point_3>, 8>(all_cl, vid)).second;
-            auto f1  = -get_vertex_force(v, cls, normalized_loads);
-            auto f1_after = constraint_force(d, v, f1);
-            if(communicator.comm_size > 1)
+
+            if(vertex_trial > 0 && communicator.comm_size > 1){
+                std::vector<double> normalized_loads, loads = (*search_in_linear_hashmap<int, std::vector<double>, 8>(all_loads, vid)).second;
+                std::transform(loads.cbegin(), loads.cend(), std::back_inserter(normalized_loads), [&avg_load](auto n){return n/avg_load;});
+                auto cls = (*search_in_linear_hashmap<int, std::vector<Point_3>, 8>(all_cl, vid)).second;
+                auto f1  = -get_vertex_force(v, cls, normalized_loads);
+                auto f1_after = constraint_force(d, v, f1);
+                int are_all_valid = false;
                 for(int trial = 0; trial < MAX_TRIAL; ++trial) {
                     auto new_vertices = vertices;
                     new_vertices[com] = move_vertex(v, f1_after, mu);
                     int valid = lb_isGeometryValid(new_vertices, get_planes(new_vertices), grid_size);
                     std::vector<int> allValid(communicator.comm_size);
                     communicator.Allgather(&valid, 1, MPI_INT, allValid.data(), 1, MPI_INT, vid);
-                    int are_all_valid = std::accumulate(allValid.begin(),allValid.end(),1,[](auto k,auto v){return k*v;});
+                    are_all_valid = std::accumulate(allValid.begin(),allValid.end(),1,[](auto k,auto v){return k*v;});
                     if(are_all_valid) {
                         vertices = new_vertices;
                         update();
@@ -286,6 +287,9 @@ public:
                         mu /= 2.0;
                     }
                 }
+                //if(!are_all_valid) vertex_trial--;
+
+            }
             iteration++;
         }
 
