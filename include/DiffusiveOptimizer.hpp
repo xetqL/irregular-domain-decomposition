@@ -30,8 +30,9 @@ public:
     void optimize(Partition& part, std::vector<Cell>& my_cells, MPI_Datatype datatype, double mu, int overloading = 0) {
         get_MPI_rank(my_rank);
         get_MPI_worldsize(worldsize);
-/*
+
         GridElementComputer lc;
+        /*
         std::vector<double> loads(worldsize), all_mu(8, mu);
         double my_load = lc.compute_load(my_cells);
         double max_load;
@@ -103,7 +104,7 @@ public:
 #endif
 
         auto stats = part.get_load_statistics<GridElementComputer>(my_cells);
-
+        auto my_load = stats.my_load;
         if(!my_rank) print_load_statitics(stats);
         /*for(int i = 0; i < world_size; ++i){
             if(my_rank == i) io::scatterplot_3d_output<GridPointTransformer>(i, "debug-domain-decomposition-"+std::to_string(0)+".dat", my_cells);
@@ -138,9 +139,32 @@ public:
         }*/
         int remaining_it = 10;
         while((remaining_it) > 0) {
+
             //auto n_list = filter_active_neighbors(part.vertices_id, vertices_remaining_trials, part.vertex_neighborhood);
             part.move_vertices<GridPointTransformer, GridElementComputer, Cell>(my_cells, datatype, avg_load, 1.0,
                                                                                 vertices_remaining_trials);
+
+            my_load = lc.compute_load(my_cells);
+            auto n_list = filter_active_neighbors(part.vertices_id, vertices_remaining_trials, part.vertex_neighborhood);
+            auto neighbors_load  = get_neighbors_info(my_load, MPI_DOUBLE, n_list, part.vertex_neighborhood);
+            for(int vid : part.vertices_id) {
+                //const bool vertex_status   = (*search_in_linear_hashmap<int, bool,   8>(strategy, vid)).second; //ulba or not
+                int& vertex_rem_trial = (*search_in_linear_hashmap<int, int,8>(vertices_remaining_trials, vid)).second; // stop or not
+                //double& prev_imbl = (*search_in_linear_hashmap<int, double, 8>(previous_imbalance, vid)).second;
+
+                if(vertex_rem_trial > 0) { // if continue
+                    //compute imbalance
+                    auto current_neighborhood_load = (*search_in_linear_hashmap<int, std::vector<double>, 8>(neighbors_load, vid)).second;
+                    double imbalance  = (*std::max_element(current_neighborhood_load.cbegin(), current_neighborhood_load.cend()) / avg_load) - 1.0;
+                    //new imbalance is good
+                    if(imbalance < 0.2) {
+                        vertex_rem_trial--;
+                    } else {
+                        vertex_rem_trial = 10;
+                        //prev_imbl = imbalance;
+                    }
+                }
+            }
             remaining_it--;
             stats = part.get_load_statistics<GridElementComputer>(my_cells);
             if(!my_rank)
