@@ -29,10 +29,9 @@ class DiffusiveOptimizer {
 public:
     void optimize(Partition& part, std::vector<Cell>& my_cells, MPI_Datatype datatype, double mu, int overloading = 0) {
         get_MPI_rank(my_rank);
-        get_MPI_worldsize(world_size);
-
-        /*GridElementComputer lc;
         get_MPI_worldsize(worldsize);
+
+        GridElementComputer lc;
         std::vector<double> loads(worldsize), all_mu(8, mu);
         double my_load = lc.compute_load(my_cells);
         double max_load;
@@ -62,7 +61,7 @@ public:
            });
 
 
-        while((remaining_it) > 0 || std::accumulate(vertices_remaining_trials.begin(), vertices_remaining_trials.end(), 0, [](int sum, auto rm) {return sum + rm.second;}) > 0) {
+        while((remaining_it) > 0){ //|| std::accumulate(vertices_remaining_trials.begin(), vertices_remaining_trials.end(), 0, [](int sum, auto rm) {return sum + rm.second;}) > 0) {
             auto n_list = filter_active_neighbors(part.vertices_id, vertices_remaining_trials, part.vertex_neighborhood);
 #ifdef DEBUG
             std::cout << my_rank << " has "<< remaining_it <<" remaining it and "
@@ -83,7 +82,7 @@ public:
                     auto current_neighborhood_load = (*search_in_linear_hashmap<int, std::vector<double>, 8>(neighbors_load, vid)).second;
                     double imbalance  = (*std::max_element(current_neighborhood_load.cbegin(), current_neighborhood_load.cend()) / avg_load) - 1.0;
                     //new imbalance is good
-                    if(imbalance < 0.2 || prev_imbl <= imbalance) {
+                    if(imbalance < 0.2) {
                         vertex_rem_trial--;
                     } else {
                         vertex_rem_trial = 10;
@@ -96,19 +95,22 @@ public:
 #endif
             }
             remaining_it--;
+            auto stats = part.get_load_statistics<GridElementComputer>(my_cells);
+            if(!my_rank)
+                print_load_statitics(stats);
             //MPI_Barrier(MPI_COMM_WORLD);
         }
 #ifdef DEBUG
         std::cout << my_rank << " has left"<<std::endl;
-#endif*/
-
+#endif
+/*
         auto stats = part.get_load_statistics<GridElementComputer>(my_cells);
 
         if(!my_rank) print_load_statitics(stats);
-        /*for(int i = 0; i < world_size; ++i){
+        *//*for(int i = 0; i < world_size; ++i){
             if(my_rank == i) io::scatterplot_3d_output<GridPointTransformer>(i, "debug-domain-decomposition-"+std::to_string(0)+".dat", my_cells);
             MPI_Barrier(MPI_COMM_WORLD);
-        }*/
+        }*//*
         auto prev_imbalance = stats.global;
 
         auto all_loads = get_neighbors_load(stats.my_load, MPI_COMM_WORLD); //global load balancing with MPI_COMM_WORLD
@@ -135,7 +137,7 @@ public:
             stats = part.get_load_statistics<GridElementComputer>(my_cells);
             if(!my_rank)
                 print_load_statitics(stats);
-        }
+        }*/
 
     }
 };

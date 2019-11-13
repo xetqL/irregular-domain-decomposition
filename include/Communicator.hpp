@@ -21,12 +21,12 @@
     MPI_Comm_size(MPI_COMM_WORLD, &worldsize_var)
 
 inline short get_type_size(MPI_Datatype type) {
-    if(type == MPI_INT)return sizeof(int);
-    if(type == MPI_DOUBLE)return sizeof(double);
-    if(type == MPI_FLOAT)return sizeof(float);
-    if(type == MPI_SHORT)return sizeof(short);
-    if(type == MPI_LONG)return sizeof(long);
-    if(type == MPI_LONG_LONG)return sizeof(long long);
+    if(type == MPI_INT)       return sizeof(int);
+    if(type == MPI_DOUBLE)    return sizeof(double);
+    if(type == MPI_FLOAT)     return sizeof(float);
+    if(type == MPI_SHORT)     return sizeof(short);
+    if(type == MPI_LONG)      return sizeof(long);
+    if(type == MPI_LONG_LONG) return sizeof(long long);
     return -1;
 }
 
