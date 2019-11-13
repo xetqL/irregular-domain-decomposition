@@ -88,6 +88,8 @@ int main(int argc, char** argv) {
     lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z);
 
     d.grid_cell_size = std::atof(argv[1]);
+    int MAX_TRIAL    = std::atoi(argv[2]);
+
 
     Cell::get_msx() = DOMAIN_SIZE_X / d.grid_cell_size;
     Cell::get_msy() = DOMAIN_SIZE_Y / d.grid_cell_size;
@@ -158,7 +160,7 @@ int main(int argc, char** argv) {
     LinearHashMap <int, int,  8> vertices_remaining_trials;
     std::transform(part.vertices_id.begin(), part.vertices_id.end(), vertices_remaining_trials.begin(),
                    [](auto id){return std::make_pair(id, 10);});
-    for(int j = 0; j < 10; ++j){
+    for(int j = 0; j < MAX_TRIAL; ++j){
         auto data = part.move_vertices<lb::GridPointTransformer, lb::GridElementComputer, Cell>(my_cells, datatype_wrapper.element_datatype, avg_load, 1.0, vertices_remaining_trials);
         if(prev_imbalance <= stats.global) mu *= 0.9;
         prev_imbalance = stats.global;
