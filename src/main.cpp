@@ -157,7 +157,9 @@ int main(int argc, char** argv) {
         if(!my_rank)
             print_load_statitics(stats);
     }*/
-
+    stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
+    if(!my_rank)
+        print_load_statitics(stats);
     MPI_Finalize();
 
     return 0;
