@@ -138,7 +138,7 @@ public:
                 print_load_statitics(stats);
         }*/
         int remaining_it = 10;
-        while((remaining_it) > 0) {
+        while((remaining_it) > 0 || std::accumulate(vertices_remaining_trials.begin(), vertices_remaining_trials.end(), 0, [](int sum, auto rm) {return sum + rm.second;}) > 0) {
 
             //auto n_list = filter_active_neighbors(part.vertices_id, vertices_remaining_trials, part.vertex_neighborhood);
             part.move_vertices<GridPointTransformer, GridElementComputer, Cell>(my_cells, datatype, avg_load, 1.0,
@@ -166,6 +166,11 @@ public:
                 }
             }
             remaining_it--;
+            stats = part.get_load_statistics<GridElementComputer>(my_cells);
+            if(!my_rank)
+                print_load_statitics(stats);
+        }
+        while(true){
             stats = part.get_load_statistics<GridElementComputer>(my_cells);
             if(!my_rank)
                 print_load_statitics(stats);
