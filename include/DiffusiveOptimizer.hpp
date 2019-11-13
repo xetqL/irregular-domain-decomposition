@@ -30,7 +30,7 @@ public:
     void optimize(Partition& part, std::vector<Cell>& my_cells, MPI_Datatype datatype, double mu, int overloading = 0) {
         get_MPI_rank(my_rank);
         get_MPI_worldsize(worldsize);
-
+/*
         GridElementComputer lc;
         std::vector<double> loads(worldsize), all_mu(8, mu);
         double my_load = lc.compute_load(my_cells);
@@ -68,7 +68,7 @@ public:
             << std::accumulate(vertices_remaining_trials.begin(), vertices_remaining_trials.end(), 0, [](int sum, auto rm) {return sum + rm.second;}) << " active vertices" <<  std::endl;
 #endif
             part.move_vertices<GridPointTransformer, GridElementComputer, Cell>(my_cells, datatype, avg_load, 1.0, vertices_remaining_trials);
-            /*my_load = lc.compute_load(my_cells);
+            my_load = lc.compute_load(my_cells);
 
             neighbors_load  = get_neighbors_info(my_load,  MPI_DOUBLE, n_list, part.vertex_neighborhood);
 
@@ -93,32 +93,22 @@ public:
 #ifdef DEBUG
                 std::cout << my_rank << " with vid "<< vid << " has "<< prev_imbl << " rt: " << vertex_rem_trial << std::endl;
 #endif
-            }*/
+            }
             remaining_it--;
             //MPI_Barrier(MPI_COMM_WORLD);
-        }
-        auto stats = part.get_load_statistics<GridElementComputer>(my_cells);
-        auto prev_imbalance = stats.global;
+        }*/
 
-        for(int j = 0; j < 10; ++j) {
-            auto data = part.move_vertices<GridPointTransformer, GridElementComputer, Cell>(my_cells, datatype, avg_load, 1.0, vertices_remaining_trials);
-            if(prev_imbalance <= stats.global) mu *= 0.9;
-            prev_imbalance = stats.global;
-            stats = part.get_load_statistics<GridElementComputer>(my_cells);
-            if(!my_rank)
-                print_load_statitics(stats);
-        }
 #ifdef DEBUG
         std::cout << my_rank << " has left"<<std::endl;
 #endif
-/*
+
         auto stats = part.get_load_statistics<GridElementComputer>(my_cells);
 
         if(!my_rank) print_load_statitics(stats);
-        *//*for(int i = 0; i < world_size; ++i){
+        /*for(int i = 0; i < world_size; ++i){
             if(my_rank == i) io::scatterplot_3d_output<GridPointTransformer>(i, "debug-domain-decomposition-"+std::to_string(0)+".dat", my_cells);
             MPI_Barrier(MPI_COMM_WORLD);
-        }*//*
+        }*/
         auto prev_imbalance = stats.global;
 
         auto all_loads = get_neighbors_load(stats.my_load, MPI_COMM_WORLD); //global load balancing with MPI_COMM_WORLD
@@ -145,7 +135,7 @@ public:
             stats = part.get_load_statistics<GridElementComputer>(my_cells);
             if(!my_rank)
                 print_load_statitics(stats);
-        }*/
+        }
 
     }
 };
