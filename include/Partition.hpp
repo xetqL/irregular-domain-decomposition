@@ -202,6 +202,33 @@ public:
         }
         return all_cl;
     }
+    LinearHashMap<int, std::vector<Point_3>, 8> spread_centers_of_load(const Point_3& cl, LinearHashMap<int, int, 8>& vertices_trial, const std::map<int, Communicator>& neighborhood) {
+        int N;
+        LinearHashMap<int, std::vector<Point_3>, 8> all_cl;
+        LinearHashMap<int, std::vector<double>,  8> buff_all_cl;
+        std::array<MPI_Request, 8> requests;
+
+        std::array<double, 3> my_cl{cl.x(), cl.y(), cl.z()};
+        int idx = 0;
+        for(auto&  comm : neighborhood) {
+            int i = comm.first;
+            if((*search_in_linear_hashmap<int, int, 8>(vertices_trial, i)).second > 0) {
+                N     = comm.second.comm_size;
+                all_cl[idx] = std::make_pair(i, std::vector<Point_3>());
+                buff_all_cl[idx] = std::make_pair(i, std::vector<double>());
+                auto& curr_buff_all_cl = (*search_in_linear_hashmap<int, std::vector<double>,  8>(buff_all_cl, i)).second;
+                auto& curr_all_cl      = (*search_in_linear_hashmap<int, std::vector<Point_3>, 8>(all_cl, i)).second;
+                curr_buff_all_cl.resize(3*N);
+                curr_all_cl.resize(N);
+                comm.second.Allgather(my_cl.data(), 3, MPI_DOUBLE, curr_buff_all_cl.data(), 3, MPI_DOUBLE, i);
+                for(int j = 0; j < N; ++j) { // reconstruct the points
+                    curr_all_cl[j] = Point_3(curr_buff_all_cl[j*3],curr_buff_all_cl[j*3+1],curr_buff_all_cl[j*3+2]);
+                }
+                idx++;
+            }
+        }
+        return all_cl;
+    }
     using ElementCount   = int;
     using Load           = double;
     using Imbalance      = double;
@@ -230,8 +257,12 @@ public:
     template<class CartesianPointTransformer, class LoadComputer, class A>
     std::vector<std::pair<ProcRank, std::vector<DataIndex>>> move_vertices(
             std::vector<A>& elements, MPI_Datatype datatype, double avg_load, double mu, LinearHashMap<int, int, 8>& vertices_trial, MPI_Comm neighborhood = MPI_COMM_WORLD) {
+        auto active_neighbors = filter_active_neighbors(vertices_id, vertices_trial, vertex_neighborhood);
 
         get_MPI_rank(my_rank);
+#ifdef DEBUG
+        std::cout << my_rank << " enters move_vertices(...); "<<std::endl;
+#endif
         LoadComputer lc;
         CartesianPointTransformer transformer;
         std::vector<Point_3> points;
@@ -243,12 +274,14 @@ public:
         std::transform(elements.cbegin(), elements.cend(), std::back_inserter(points), [&transformer](auto el){return transformer.transform(el);});
 
         int N; MPI_Comm_size(neighborhood, &N);
-
-        auto all_loads = get_neighbors_load(my_load, neighbor_list, vertex_neighborhood); //global load balancing with MPI_COMM_WORLD
+#ifdef DEBUG
+        std::cout << my_rank << " computes load; "<<std::endl;
+#endif
+        auto all_loads = get_neighbors_load(my_load, active_neighbors, vertex_neighborhood);
 
         auto center_of_load = get_center_of_load(weights, points);
 
-        LinearHashMap<VertIndex, std::vector<Point_3>, 8> all_cl = spread_centers_of_load(center_of_load, vertex_neighborhood);
+        LinearHashMap<VertIndex, std::vector<Point_3>, 8> all_cl = spread_centers_of_load(center_of_load, vertices_trial, vertex_neighborhood);
 
         std::vector<int> vertex_local_id_to_move = {0, 1, 2, 3, 4, 5, 6, 7, 8};
 
@@ -266,7 +299,9 @@ public:
             const auto& communicator = vertex_neighborhood[vid];
 
             if(vertex_trial > 0 && communicator.comm_size > 1) {
+#ifdef DEBUG
                 std::cout << my_rank << " tries to move vertex " << vid << " with comm_size "<< communicator.comm_size<< std::endl;
+#endif
                 std::vector<double> normalized_loads, loads = (*search_in_linear_hashmap<int, std::vector<double>, 8>(all_loads, vid)).second;
                 std::transform(loads.cbegin(), loads.cend(), std::back_inserter(normalized_loads), [&avg_load](auto n){return n/avg_load;});
                 auto cls = (*search_in_linear_hashmap<int, std::vector<Point_3>, 8>(all_cl, vid)).second;
@@ -291,6 +326,9 @@ public:
                 //if(!are_all_valid) vertex_trial--;
 
             }
+#ifdef DEBUG
+            else {std::cout << "Skipping " << vid << std::endl;}
+#endif
             iteration++;
         }
 
@@ -307,34 +345,36 @@ public:
         // after moving all the vertices, move the data
         // create neighbors domain
         const auto my_domain = this->serialize();
-        int number_of_neighbors = neighbor_list.size();
+        const auto number_of_neighbors = active_neighbors.size();
 
         std::vector<std::pair<ProcRank, std::vector<A>>>  migration_and_destination(number_of_neighbors);
         std::vector<std::pair<ProcRank, std::vector<DataIndex>>> neighbor_ghosts(number_of_neighbors);
 
-        std::transform(neighbor_list.begin(), neighbor_list.end(), migration_and_destination.begin(),
+        std::transform(active_neighbors.begin(), active_neighbors.end(), migration_and_destination.begin(),
                 [](ProcRank i){ return std::make_pair(i, std::vector<A>()); });
-        std::transform(neighbor_list.begin(), neighbor_list.end(), neighbor_ghosts.begin(),
+        std::transform(active_neighbors.begin(), active_neighbors.end(), neighbor_ghosts.begin(),
                        [](ProcRank i){ return std::make_pair(i, std::vector<DataIndex>()); });
 
-        std::vector<double> recv_buff(neighbor_list.size()*8*3);
-        std::vector<MPI_Request> srequests(neighbor_list.size()), rrequests(neighbor_list.size());
+        std::vector<double> recv_buff(active_neighbors.size()*8*3);
+        std::vector<MPI_Request> srequests(active_neighbors.size()), rrequests(active_neighbors.size());
 
         //TODO: This creates a deadlock. People are leaving the parallel section, therefore, we should not spread domain
         // data to every neighbors. Instead, we have to create the list of active neighbors as function of the vertex
         // remaining trials array and the list of neighbors by vertex id from the communicator. Furthermore, we need a mock
         // partition that respond false to every contains() call to avoid distinguishing active/inactive partition.
+
         {
+
             int i = 0;
-            for(ProcRank neighbor_rank : neighbor_list) {
+            for(ProcRank neighbor_rank : active_neighbors) {
                 MPI_Isend(my_domain.data(), 24, MPI_DOUBLE, neighbor_rank, 9999, MPI_COMM_WORLD, &srequests[i]);
                 MPI_Irecv((recv_buff.data() + i * 24), 24, MPI_DOUBLE, neighbor_rank, 9999, MPI_COMM_WORLD, &rrequests[i]);
                 i++;
             }
         }
 
-        MPI_Waitall(neighbor_list.size(), rrequests.data(), MPI_STATUSES_IGNORE);
-        MPI_Waitall(neighbor_list.size(), srequests.data(), MPI_STATUSES_IGNORE);
+        MPI_Waitall(number_of_neighbors, rrequests.data(), MPI_STATUSES_IGNORE);
+        MPI_Waitall(number_of_neighbors, srequests.data(), MPI_STATUSES_IGNORE);
 
         std::vector<Partition> neighborhoods;
         for(int i = 0; i < number_of_neighbors; ++i) {
@@ -369,7 +409,7 @@ public:
             } else*/ if(!is_real_cell){ // transfer data to neighbor
                 //throw std::runtime_error("?");
                 for(int nid = 0; nid < number_of_neighbors; ++nid) {
-                    const auto  neighbor_rank = migration_and_destination[nid].first;
+                    const auto neighbor_rank = migration_and_destination[nid].first;
                     if(neighbor_rank < 0 || neighbor_rank == my_rank) continue;
                     const auto& neighborhood_domains = neighborhoods[nid];
                     if(neighborhood_domains.contains(point)) {
@@ -412,8 +452,13 @@ public:
                 recv_load += lc.compute_load(buf);
                 std::move(buf.begin(), buf.end(), std::back_inserter(elements));
             }
-            //if(my_rank == DBG_RANK) std::cout << DBG_RANK<< " received " <<recv_load << std::endl;
+#ifdef DEBUG
+            std::cout << my_rank << " received " << recv_load << std::endl;
+#endif
             MPI_Waitall(number_of_neighbors, srequests.data(), MPI_STATUSES_IGNORE);
+#ifdef DEBUG
+            std::cout << my_rank << " leaves move_vertices(...); " << recv_load << std::endl;
+#endif
         }
         return neighbor_ghosts;
     }

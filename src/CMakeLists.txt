@@ -23,3 +23,8 @@ target_link_libraries(adlbirreg ${MPI_C_LIBRARIES})
 target_link_libraries(test_communcation ${MPI_C_LIBRARIES})
 
 target_compile_definitions(adlbirreg PRIVATE CGAL_DISABLE_ROUNDING_MATH_CHECK=ON)
+
+IF(CMAKE_BUILD_TYPE MATCHES Debug)
+    message("Debug on")
+    target_compile_definitions(adlbirreg PUBLIC DEBUG=True)
+ENDIF(CMAKE_BUILD_TYPE MATCHES Debug)

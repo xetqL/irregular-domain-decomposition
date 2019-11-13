@@ -28,6 +28,19 @@ search_in_linear_hashmap(std::array<std::pair<K, V>, N> &linmap, K key) {
     return entry;
 }
 
+template<class K, class V, int N>
+typename LinearHashMap<K, V, N>::const_iterator
+search_in_linear_hashmap(const std::array<std::pair<K, V>, N> &linmap, K key) {
+    //for(std::pair<int, std::vector<A>>& entry : linmap) {
+    auto entry = linmap.begin();
+    for (; entry != linmap.end(); entry++) {
+        if ((*entry).first == key) return entry;
+    }
+    return entry;
+}
+std::set<int> filter_active_neighbors(const std::array<int, 8>& vertices_id,
+                                      const LinearHashMap<int, int, 8>& vertices_trial,
+                                      const std::map<int, Communicator>& vertex_neighborhood);
 /**
  * To compute the local average load use local communicator, otherwise use MPI_COMM_WORLD
  * @param my_load

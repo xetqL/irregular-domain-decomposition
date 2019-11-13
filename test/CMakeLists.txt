@@ -4,6 +4,7 @@ set(CMAKE_LIBRARY_PATH ${CMAKE_LIBRARY_PATH} /opt/ /opt/ompi)
 
 set(CMAKE_CXX_COMPILER ${MPI_CXX_COMPILER})
 
+
 find_package(CGAL)
 
 include(${CGAL_USE_FILE})

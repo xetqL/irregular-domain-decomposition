@@ -40,3 +40,17 @@ get_neighbors_load(double my_load, const std::set<int> &neighbors, const std::ma
     }
     return neighborhoods_load;
 }
+
+std::set<int> filter_active_neighbors(const std::array<int, 8>& vertices_id,
+                                      const LinearHashMap<int, int, 8>& vertices_trial,
+                                      const std::map<int, Communicator>& vertex_neighborhood) {
+    std::set<int> active_neighbors;
+    for(int vid : vertices_id) {
+        const int vertex_trial = (*search_in_linear_hashmap<int, int, 8>(vertices_trial, vid)).second;
+        if(vertex_trial > 0) {
+            auto active_ranks = vertex_neighborhood.at(vid).get_ranks();
+            active_neighbors.insert(active_ranks.begin(), active_ranks.end());
+        }
+    }
+    return active_neighbors;
+}

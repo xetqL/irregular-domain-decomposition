@@ -47,11 +47,16 @@ public:
 
         get_MPI_rank(my_rank);
         while((remaining_it) > 0 || std::accumulate(vertices_remaining_trials.begin(), vertices_remaining_trials.end(), 0, [](int sum, auto rm) {return sum + rm.second;}) > 0) {
+            auto n_list = filter_active_neighbors(part.vertices_id, vertices_remaining_trials, part.vertex_neighborhood);
+#ifdef DEBUG
             std::cout << my_rank << " has "<< remaining_it <<" remaining it and "
             << std::accumulate(vertices_remaining_trials.begin(), vertices_remaining_trials.end(), 0, [](int sum, auto rm) {return sum + rm.second;}) << " active vertices" <<  std::endl;
+#endif
             part.move_vertices<GridPointTransformer, GridElementComputer, Cell>(my_cells, datatype, avg_load, 1.0, vertices_remaining_trials);
             my_load = lc.compute_load(my_cells);
-            neighbors_load  = get_neighbors_info(my_load,  MPI_DOUBLE, part.neighbor_list, part.vertex_neighborhood);
+
+            neighbors_load  = get_neighbors_info(my_load,  MPI_DOUBLE, n_list, part.vertex_neighborhood);
+
             for(int vid : part.vertices_id) {
                 //const bool vertex_status   = (*search_in_linear_hashmap<int, bool,   8>(strategy, vid)).second; //ulba or not
                 int& vertex_rem_trial = (*search_in_linear_hashmap<int, int,    8>(vertices_remaining_trials, vid)).second; // stop or not
@@ -69,13 +74,17 @@ public:
                         prev_imbl = imbalance;
                     }
                 }
+#ifdef DEBUG
                 std::cout << my_rank << " with vid "<< vid << " has "<< prev_imbl << " rt: " << vertex_rem_trial << std::endl;
-
+#endif
             }
             remaining_it--;
-            MPI_Barrier(MPI_COMM_WORLD);
+            //MPI_Barrier(MPI_COMM_WORLD);
         }
+#ifdef DEBUG
         std::cout << my_rank << " has left"<<std::endl;
+#endif
+
     }
 };
 
