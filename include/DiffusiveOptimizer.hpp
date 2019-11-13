@@ -61,7 +61,7 @@ public:
         LinearHashMap <int, int, 8> vertices_remaining_trials;
         std::transform(part.vertices_id.begin(), part.vertices_id.end(), vertices_remaining_trials.begin(),
                        [](auto id){return std::make_pair(id, 10);});
-        while((remaining_it) > 0){ //|| std::accumulate(vertices_remaining_trials.begin(), vertices_remaining_trials.end(), 0, [](int sum, auto rm) {return sum + rm.second;}) > 0) {
+        while((remaining_it) > 0 || std::accumulate(vertices_remaining_trials.begin(), vertices_remaining_trials.end(), 0, [](int sum, auto rm) {return sum + rm.second;}) > 0) {
             //auto n_list = filter_active_neighbors(part.vertices_id, vertices_remaining_trials, part.vertex_neighborhood);
 #ifdef DEBUG
             std::cout << my_rank << " has "<< remaining_it <<" remaining it and "
@@ -127,7 +127,7 @@ public:
         LinearHashMap <int, int, 8> vertices_remaining_trials;
         std::transform(part.vertices_id.begin(), part.vertices_id.end(), vertices_remaining_trials.begin(),
                        [](auto id){return std::make_pair(id, 10);});
-        for(int j = 0; j < 10; ++j) {
+        /*for(int j = 0; j < 10; ++j) {
             auto data = part.move_vertices<GridPointTransformer, GridElementComputer, Cell>(my_cells, datatype, avg_load, 1.0, vertices_remaining_trials);
             if(prev_imbalance <= stats.global) mu *= 0.9;
             prev_imbalance = stats.global;
@@ -135,8 +135,17 @@ public:
             stats = part.get_load_statistics<GridElementComputer>(my_cells);
             if(!my_rank)
                 print_load_statitics(stats);
+        }*/
+        int remaining_it = 10;
+        while((remaining_it) > 0) {
+            //auto n_list = filter_active_neighbors(part.vertices_id, vertices_remaining_trials, part.vertex_neighborhood);
+            part.move_vertices<GridPointTransformer, GridElementComputer, Cell>(my_cells, datatype, avg_load, 1.0,
+                                                                                vertices_remaining_trials);
+            remaining_it--;
+            stats = part.get_load_statistics<GridElementComputer>(my_cells);
+            if(!my_rank)
+                print_load_statitics(stats);
         }
-
     }
 };
 
