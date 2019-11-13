@@ -95,15 +95,11 @@ public:
 #endif
             }*/
             remaining_it--;
-            auto stats = part.get_load_statistics<GridElementComputer>(my_cells);
-            if(!my_rank)
-                print_load_statitics(stats);
             //MPI_Barrier(MPI_COMM_WORLD);
         }
 
         for(int j = 0; j < 10; ++j) {
             auto data = part.move_vertices<GridPointTransformer, GridElementComputer, Cell>(my_cells, datatype, avg_load, 1.0, vertices_remaining_trials);
-
             auto stats = part.get_load_statistics<GridElementComputer>(my_cells);
             if(!my_rank)
                 print_load_statitics(stats);
