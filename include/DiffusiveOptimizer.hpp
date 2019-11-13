@@ -46,9 +46,7 @@ public:
         LinearHashMap<int, double, 8> previous_imbalance;
         std::zip(part.vertices_id.begin(), part.vertices_id.end(), imbalances.begin(), imbalances.end(), previous_imbalance.begin());
         auto remaining_it = (int) worldsize ;
-        LinearHashMap <int, int,  8> vertices_remaining_trials;
-        std::transform(part.vertices_id.begin(), part.vertices_id.end(), vertices_remaining_trials.begin(),
-                       [&remaining_it](auto id){return std::make_pair(id, 10 + remaining_it);});
+
         LinearHashMap <int, bool, 8> vertices_status; //active = true, inactive = false
         std::transform(part.vertices_id.begin(), part.vertices_id.end(), vertices_status.begin(),
                        [](auto id){return std::make_pair(id, true);});
@@ -60,9 +58,11 @@ public:
                return std::make_pair(statuses.first, std::any_of(statuses.second.cbegin(), statuses.second.cend(), [](int status){return status;}));
            });
 
-
+        LinearHashMap <int, int, 8> vertices_remaining_trials;
+        std::transform(part.vertices_id.begin(), part.vertices_id.end(), vertices_remaining_trials.begin(),
+                       [](auto id){return std::make_pair(id, 10);});
         while((remaining_it) > 0){ //|| std::accumulate(vertices_remaining_trials.begin(), vertices_remaining_trials.end(), 0, [](int sum, auto rm) {return sum + rm.second;}) > 0) {
-            auto n_list = filter_active_neighbors(part.vertices_id, vertices_remaining_trials, part.vertex_neighborhood);
+            //auto n_list = filter_active_neighbors(part.vertices_id, vertices_remaining_trials, part.vertex_neighborhood);
 #ifdef DEBUG
             std::cout << my_rank << " has "<< remaining_it <<" remaining it and "
             << std::accumulate(vertices_remaining_trials.begin(), vertices_remaining_trials.end(), 0, [](int sum, auto rm) {return sum + rm.second;}) << " active vertices" <<  std::endl;
@@ -100,6 +100,14 @@ public:
                 print_load_statitics(stats);
             //MPI_Barrier(MPI_COMM_WORLD);
         }
+
+        for(int j = 0; j < 10; ++j) {
+            auto data = part.move_vertices<GridPointTransformer, GridElementComputer, Cell>(my_cells, datatype, avg_load, 1.0, vertices_remaining_trials);
+
+            auto stats = part.get_load_statistics<GridElementComputer>(my_cells);
+            if(!my_rank)
+                print_load_statitics(stats);
+        }
 #ifdef DEBUG
         std::cout << my_rank << " has left"<<std::endl;
 #endif
@@ -126,7 +134,7 @@ public:
         std::vector<double> all_mu(8, mu);
         LinearHashMap<int, double, 8> vertices_mu;
         std::zip(part.vertices_id.begin(), part.vertices_id.end(), all_mu.begin(), all_mu.end(), vertices_mu.begin());
-        LinearHashMap <int, int,  8> vertices_remaining_trials;
+        LinearHashMap <int, int, 8> vertices_remaining_trials;
         std::transform(part.vertices_id.begin(), part.vertices_id.end(), vertices_remaining_trials.begin(),
                        [](auto id){return std::make_pair(id, 10);});
         for(int j = 0; j < 10; ++j) {
