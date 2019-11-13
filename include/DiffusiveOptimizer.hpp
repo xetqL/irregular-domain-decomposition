@@ -112,7 +112,7 @@ public:
         auto prev_imbalance = stats.global;
 
         auto all_loads = get_neighbors_load(stats.my_load, MPI_COMM_WORLD); //global load balancing with MPI_COMM_WORLD
-        auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / world_size;
+        auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / worldsize;
 
         //DiffusiveOptimizer<GridPointTransformer, GridElementComputer, Cell> diff_opt;
 
