@@ -127,7 +127,7 @@ public:
         std::zip(part.vertices_id.begin(), part.vertices_id.end(), all_mu.begin(), all_mu.end(), vertices_mu.begin());
         LinearHashMap <int, int, 8> vertices_remaining_trials;
         std::transform(part.vertices_id.begin(), part.vertices_id.end(), vertices_remaining_trials.begin(),
-                       [](auto id){return std::make_pair(id, 10);});
+                       [](auto id){return std::make_pair(id, 20);});
         /*for(int j = 0; j < 10; ++j) {
             auto data = part.move_vertices<GridPointTransformer, GridElementComputer, Cell>(my_cells, datatype, avg_load, 1.0, vertices_remaining_trials);
             if(prev_imbalance <= stats.global) mu *= 0.9;
@@ -160,7 +160,7 @@ public:
                     if(imbalance < 0.2) {
                         vertex_rem_trial--;
                     } else {
-                        vertex_rem_trial = 10;
+                        vertex_rem_trial = 20;
                         //prev_imbl = imbalance;
                     }
                 }
