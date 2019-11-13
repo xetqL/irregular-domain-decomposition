@@ -30,10 +30,10 @@ public:
         LinearHashMap<int, double, 8> vertices_mu;
         LinearHashMap<int, double, 8> previous_imbalance;
         std::zip(part.vertices_id.begin(), part.vertices_id.end(), imbalances.begin(), imbalances.end(), previous_imbalance.begin());
-        auto remaining_it = (int) std::cbrt(worldsize) ;
+        auto remaining_it = (int) worldsize ;
         LinearHashMap <int, int,  8> vertices_remaining_trials;
         std::transform(part.vertices_id.begin(), part.vertices_id.end(), vertices_remaining_trials.begin(),
-                       [&remaining_it](auto id){return std::make_pair(id, 3 + remaining_it);});
+                       [&remaining_it](auto id){return std::make_pair(id, 10 + remaining_it);});
         LinearHashMap <int, bool, 8> vertices_status; //active = true, inactive = false
         std::transform(part.vertices_id.begin(), part.vertices_id.end(), vertices_status.begin(),
                        [](auto id){return std::make_pair(id, true);});
@@ -59,7 +59,7 @@ public:
 
             for(int vid : part.vertices_id) {
                 //const bool vertex_status   = (*search_in_linear_hashmap<int, bool,   8>(strategy, vid)).second; //ulba or not
-                int& vertex_rem_trial = (*search_in_linear_hashmap<int, int,    8>(vertices_remaining_trials, vid)).second; // stop or not
+                int& vertex_rem_trial = (*search_in_linear_hashmap<int, int,8>(vertices_remaining_trials, vid)).second; // stop or not
                 double& prev_imbl = (*search_in_linear_hashmap<int, double, 8>(previous_imbalance, vid)).second;
 
                 if(vertex_rem_trial > 0) { // if continue
@@ -70,10 +70,11 @@ public:
                     if(imbalance < 0.2 || prev_imbl <= imbalance) {
                         vertex_rem_trial--;
                     } else {
-                        vertex_rem_trial = 3;
+                        vertex_rem_trial = 10;
                         prev_imbl = imbalance;
                     }
                 }
+
 #ifdef DEBUG
                 std::cout << my_rank << " with vid "<< vid << " has "<< prev_imbl << " rt: " << vertex_rem_trial << std::endl;
 #endif
