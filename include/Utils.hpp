@@ -63,6 +63,8 @@ inline std::vector<double> get_neighbors_load(double my_load, MPI_Comm neighborh
     return all_loads;
 }
 
+std::pair<int, std::vector<double>> get_neighbors_load(double my_load, int vid, const Communicator &v_comm);
+
 LinearHashMap<int, std::vector<double>, 8>
 get_neighbors_load(double my_load, const std::set<int> &neighbors, const std::map<int, Communicator> &v_neighborhood);
 

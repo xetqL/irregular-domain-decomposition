@@ -76,7 +76,7 @@ int main(int argc, char** argv) {
     lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z);
 
     d.grid_cell_size = std::atof(argv[1]);
-    int MAX_TRIAL    = std::atoi(argv[2]);
+    int MAX_ITER     = std::atoi(argv[2]);
 
 
     Cell::get_msx() = DOMAIN_SIZE_X / d.grid_cell_size;
@@ -135,11 +135,7 @@ int main(int argc, char** argv) {
     auto all_loads = get_neighbors_load(stats.my_load, MPI_COMM_WORLD); //global load balancing with MPI_COMM_WORLD
     auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / world_size;
 
-    lb::DiffusiveOptimizer<lb::GridPointTransformer, lb::GridElementComputer, Cell> diff_opt;
-
-    diff_opt.optimize(part, my_cells, datatype_wrapper.element_datatype, 1.0);
-
-    /*stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
+    stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
     if(!my_rank)
         print_load_statitics(stats);
     std::vector<double> all_mu(8, mu);
@@ -148,18 +144,17 @@ int main(int argc, char** argv) {
     LinearHashMap <int, int,  8> vertices_remaining_trials;
     std::transform(part.vertices_id.begin(), part.vertices_id.end(), vertices_remaining_trials.begin(),
                    [](auto id){return std::make_pair(id, 10);});
-    for(int j = 0; j < MAX_TRIAL; ++j) {
-        auto data = part.move_vertices<lb::GridPointTransformer, lb::GridElementComputer, Cell>(my_cells, datatype_wrapper.element_datatype, avg_load, 1.0, vertices_remaining_trials);
+
+    for(int j = 0; j < MAX_ITER; ++j) {
+        auto data = part.move_selected_vertices<lb::GridPointTransformer, lb::GridElementComputer, Cell>(j, my_cells, datatype_wrapper.element_datatype, avg_load, mu);
         if(prev_imbalance <= stats.global) mu *= 0.9;
         prev_imbalance = stats.global;
 
         stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
         if(!my_rank)
             print_load_statitics(stats);
-    }*/
-    stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
-    if(!my_rank)
-        print_load_statitics(stats);
+    }
+
     MPI_Finalize();
 
     return 0;
