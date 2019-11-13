@@ -147,23 +147,26 @@ int main(int argc, char** argv) {
 
     lb::DiffusiveOptimizer<lb::GridPointTransformer, lb::GridElementComputer, Cell> diff_opt;
 
-    diff_opt.optimize(part, my_cells, datatype_wrapper.element_datatype, 1.0);
+    //diff_opt.optimize(part, my_cells, datatype_wrapper.element_datatype, 1.0);
 
     stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
     if(!my_rank)
         print_load_statitics(stats);
-    /*std::vector<double> all_mu(8, mu);
+    std::vector<double> all_mu(8, mu);
     LinearHashMap<int, double, 8> vertices_mu;
     std::zip(part.vertices_id.begin(), part.vertices_id.end(), all_mu.begin(), all_mu.end(), vertices_mu.begin());
-    for(int j = 0; j < 2; ++j){
-        auto data = part.move_vertices<lb::GridPointTransformer, lb::GridElementComputer, Cell>(my_cells, datatype_wrapper.element_datatype, avg_load, vertices_mu);
+    LinearHashMap <int, int,  8> vertices_remaining_trials;
+    std::transform(part.vertices_id.begin(), part.vertices_id.end(), vertices_remaining_trials.begin(),
+                   [](auto id){return std::make_pair(id, 10);});
+    for(int j = 0; j < 10; ++j){
+        auto data = part.move_vertices<lb::GridPointTransformer, lb::GridElementComputer, Cell>(my_cells, datatype_wrapper.element_datatype, avg_load, 1.0, vertices_remaining_trials);
         if(prev_imbalance <= stats.global) mu *= 0.9;
         prev_imbalance = stats.global;
 
         stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
         if(!my_rank)
             print_load_statitics(stats);
-    }*/
+    }
 
     MPI_Finalize();
 
