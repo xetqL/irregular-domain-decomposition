@@ -68,7 +68,7 @@ public:
             << std::accumulate(vertices_remaining_trials.begin(), vertices_remaining_trials.end(), 0, [](int sum, auto rm) {return sum + rm.second;}) << " active vertices" <<  std::endl;
 #endif
             part.move_vertices<GridPointTransformer, GridElementComputer, Cell>(my_cells, datatype, avg_load, 1.0, vertices_remaining_trials);
-            my_load = lc.compute_load(my_cells);
+            /*my_load = lc.compute_load(my_cells);
 
             neighbors_load  = get_neighbors_info(my_load,  MPI_DOUBLE, n_list, part.vertex_neighborhood);
 
@@ -93,7 +93,7 @@ public:
 #ifdef DEBUG
                 std::cout << my_rank << " with vid "<< vid << " has "<< prev_imbl << " rt: " << vertex_rem_trial << std::endl;
 #endif
-            }
+            }*/
             remaining_it--;
             auto stats = part.get_load_statistics<GridElementComputer>(my_cells);
             if(!my_rank)
