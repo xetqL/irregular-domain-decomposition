@@ -45,7 +45,7 @@ public:
         LinearHashMap<int, double, 8> vertices_mu;
         LinearHashMap<int, double, 8> previous_imbalance;
         std::zip(part.vertices_id.begin(), part.vertices_id.end(), imbalances.begin(), imbalances.end(), previous_imbalance.begin());
-        auto remaining_it = (int) worldsize ;
+        auto remaining_it = (int) std::cbrt(worldsize)-2;
 
         LinearHashMap <int, bool, 8> vertices_status; //active = true, inactive = false
         std::transform(part.vertices_id.begin(), part.vertices_id.end(), vertices_status.begin(),
@@ -97,10 +97,14 @@ public:
             remaining_it--;
             //MPI_Barrier(MPI_COMM_WORLD);
         }
+        auto stats = part.get_load_statistics<GridElementComputer>(my_cells);
+        auto prev_imbalance = stats.global;
 
         for(int j = 0; j < 10; ++j) {
             auto data = part.move_vertices<GridPointTransformer, GridElementComputer, Cell>(my_cells, datatype, avg_load, 1.0, vertices_remaining_trials);
-            auto stats = part.get_load_statistics<GridElementComputer>(my_cells);
+            if(prev_imbalance <= stats.global) mu *= 0.9;
+            prev_imbalance = stats.global;
+            stats = part.get_load_statistics<GridElementComputer>(my_cells);
             if(!my_rank)
                 print_load_statitics(stats);
         }
