@@ -14,6 +14,7 @@
 #include <set>
 #include "GeometricUtils.hpp"
 
+
 template<class K, class V, int N>
 using LinearHashMap = std::array<std::pair<K, V>, N>;
 

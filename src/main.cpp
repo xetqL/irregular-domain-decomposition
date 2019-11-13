@@ -57,19 +57,7 @@ struct GridPointTransformer {
 
 }
 
-void print_load_statitics(lb::Partition::LoadStatistics stats){
-    lb::Partition::ElementCount count;
-    lb::Partition::Load max_load, avg_load;
-    lb::Partition::Imbalance load_imbalance, my_imbalance;
-    std::tie(count, max_load, avg_load, load_imbalance, my_imbalance) = stats;
-    std::cout << "===============================================\n"
-              << "Total number of elements: " << count             << "\n"
-              << "            Maximum load: " << max_load          << "\n"
-              << "            Average load: " << avg_load          << "\n"
-              << "   Global Load Imbalance: " << load_imbalance    << "\n"
-              << "       My Load Imbalance: " << my_imbalance      <<
-               "\n===============================================" << std::endl;
-}
+
 
 int main(int argc, char** argv) {
     MPI_Init(&argc, &argv);
@@ -149,9 +137,9 @@ int main(int argc, char** argv) {
 
     lb::DiffusiveOptimizer<lb::GridPointTransformer, lb::GridElementComputer, Cell> diff_opt;
 
-    //diff_opt.optimize(part, my_cells, datatype_wrapper.element_datatype, 1.0);
+    diff_opt.optimize(part, my_cells, datatype_wrapper.element_datatype, 1.0);
 
-    stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
+    /*stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
     if(!my_rank)
         print_load_statitics(stats);
     std::vector<double> all_mu(8, mu);
@@ -160,7 +148,7 @@ int main(int argc, char** argv) {
     LinearHashMap <int, int,  8> vertices_remaining_trials;
     std::transform(part.vertices_id.begin(), part.vertices_id.end(), vertices_remaining_trials.begin(),
                    [](auto id){return std::make_pair(id, 10);});
-    for(int j = 0; j < MAX_TRIAL; ++j){
+    for(int j = 0; j < MAX_TRIAL; ++j) {
         auto data = part.move_vertices<lb::GridPointTransformer, lb::GridElementComputer, Cell>(my_cells, datatype_wrapper.element_datatype, avg_load, 1.0, vertices_remaining_trials);
         if(prev_imbalance <= stats.global) mu *= 0.9;
         prev_imbalance = stats.global;
@@ -168,7 +156,7 @@ int main(int argc, char** argv) {
         stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
         if(!my_rank)
             print_load_statitics(stats);
-    }
+    }*/
 
     MPI_Finalize();
 

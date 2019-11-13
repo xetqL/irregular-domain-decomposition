@@ -54,3 +54,4 @@ std::set<int> filter_active_neighbors(const std::array<int, 8>& vertices_id,
     }
     return active_neighbors;
 }
+
