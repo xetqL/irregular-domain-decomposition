@@ -15,6 +15,8 @@ namespace lb{
 
 double compute_mu(double grid_size, double max_normalized_load);
 int get_rank_from_vertices(const std::array<int, 4>& vertices_id, const std::map<int, Communicator>& neighborhoods);
+int translate_iteration_to_vertex_group(int physical_iteration, lb::Point_3 coord);
+
 
 class Partition {
 public:
@@ -499,7 +501,6 @@ public:
         const auto& communicator = vertex_neighborhood[vid];
         auto nranks = communicator.get_ranks();
         std::set<int> active_neighbors(nranks.begin(), nranks.end());//filter_active_neighbors(vertices_id, vertices_trial, vertex_neighborhood);
-
         LoadComputer lc;
         CartesianPointTransformer transformer;
         std::vector<Point_3> points;
@@ -518,7 +519,7 @@ public:
 
         std::pair<VertIndex, std::vector<Point_3>> cls = spread_centers_of_load(center_of_load, vid, communicator);
 
-        const int MAX_TRIAL    = 3;
+        const int MAX_TRIAL = 3;
 
         if(communicator.comm_size > 1) {
 #ifdef DEBUG

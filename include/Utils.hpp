@@ -14,7 +14,27 @@
 #include <set>
 #include "GeometricUtils.hpp"
 
+template<typename Realtype, typename ContainerA>
+Realtype get_slope(const ContainerA& y){
+    //std::cout << y.size() << std::endl;
+    std::vector<Realtype> x(y.size());
+    std::iota(x.begin(),x.end(), 0);
 
+    int n = x.size();
+
+    Realtype avgX = std::accumulate(x.begin(), x.end(), 0.0) / n;
+    Realtype avgY = std::accumulate(y.begin(), y.end(), 0.0) / n;
+
+    Realtype numerator = 0.0;
+    Realtype denominator = 0.0;
+
+    for(int i=0; i < n; ++i) {
+        numerator   += (x[i] - avgX) * (y[i] - avgY);
+        denominator += (x[i] - avgX) * (x[i] - avgX);
+    }
+
+    return denominator == 0 ? (Realtype) 0 : numerator / denominator;
+}
 template<class K, class V, int N>
 using LinearHashMap = std::array<std::pair<K, V>, N>;
 

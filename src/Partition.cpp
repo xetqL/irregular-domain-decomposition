@@ -23,4 +23,14 @@ int get_rank_from_vertices(const std::array<int, 4>& vertices_id, const std::map
     }
     throw std::runtime_error("nobody owns the 4 vertices?");
 }
+
+int translate_iteration_to_vertex_group(int physical_iteration, lb::Point_3 coord){
+    auto iteration = physical_iteration % 8;
+    auto x = iteration&1; auto y = (iteration&2)>>1; auto z = (iteration&4)>>2;
+    int com = (((unsigned int) coord.x()+x) & 1)  +
+              (((unsigned int) coord.y()+y) & 1)*2+
+              (((unsigned int) coord.z()+z) & 1)*4;
+    return com;
+}
+
 }

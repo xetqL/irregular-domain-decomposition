@@ -10,6 +10,7 @@
 #include "DiffusiveOptimizer.hpp"
 #include <Domain.hpp>
 #include <Cell.hpp>
+#include <SlidingWindow.hpp>
 
 int my_rank, world_size;
 
@@ -138,21 +139,50 @@ int main(int argc, char** argv) {
     stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
     if(!my_rank)
         print_load_statitics(stats);
-    std::vector<double> all_mu(8, mu);
-    LinearHashMap<int, double, 8> vertices_mu;
-    std::zip(part.vertices_id.begin(), part.vertices_id.end(), all_mu.begin(), all_mu.end(), vertices_mu.begin());
-    LinearHashMap <int, int,  8> vertices_remaining_trials;
-    std::transform(part.vertices_id.begin(), part.vertices_id.end(), vertices_remaining_trials.begin(),
-                   [](auto id){return std::make_pair(id, 10);});
-
+    LinearHashMap<int, double, 8> com_lb_time;
+    std::transform(part.vertices_id.begin(), part.vertices_id.end(), com_lb_time.begin(),
+                   [](auto id){return std::make_pair(id, 0);});
+    std::array<SlidingWindow<double>, 8> arr_window = {
+            SlidingWindow<double>(100), SlidingWindow<double>(100),
+            SlidingWindow<double>(100), SlidingWindow<double>(100),
+            SlidingWindow<double>(100), SlidingWindow<double>(100),
+            SlidingWindow<double>(100), SlidingWindow<double>(100)
+    };
+    LinearHashMap<int, int, 8> com_ncall;
+    std::transform(part.vertices_id.begin(), part.vertices_id.end(), com_ncall.begin(),
+                   [](auto id){return std::make_pair(id, 0);});
+    bool lb_decision = false;
+    int pcall = 0;
     for(int j = 0; j < MAX_ITER; ++j) {
-        auto data = part.move_selected_vertices<lb::GridPointTransformer, lb::GridElementComputer, Cell>(j, my_cells, datatype_wrapper.element_datatype, avg_load, mu);
-        if(prev_imbalance <= stats.global) mu *= 0.9;
-        prev_imbalance = stats.global;
+        int com = lb::translate_iteration_to_vertex_group(j, part.coord);
+        lb_decision = pcall + (*search_in_linear_hashmap<int, int, 8>(com_ncall, com)).second >= j;
+        auto vid = part.vertices_id[com];
+        const auto& communicator = part.vertex_neighborhood[vid];
+        std::vector<int> comm_workloads(communicator.comm_size, 0);
+        int workload = my_cells.size();
+        communicator.Allgather(&workload, 1, MPI_INT, comm_workloads.data(), 1, MPI_INT, vid);
+        SlidingWindow<double> window = arr_window[com];
 
+        //std::cout << "max el " << *std::max_element(comm_workloads.begin(), comm_workloads.end()) << std::endl;
+        window.add(*std::max_element(comm_workloads.begin(), comm_workloads.end()));
+        //std::cout << window.data_container.size() << std::endl;
+        if(lb_decision) {
+            auto start_time = MPI_Wtime();
+            auto data = part.move_selected_vertices<lb::GridPointTransformer, lb::GridElementComputer, Cell>(
+                    j,                                 // the groups that moves
+                    my_cells,                          // the data to LB
+                    datatype_wrapper.element_datatype, // the data associated with the data
+                    avg_load,                          // the average load
+                    mu);                               // the movement factor
+            auto lb_time = MPI_Wtime() - start_time;
+            auto& C = (*search_in_linear_hashmap<int, double, 8>(com_lb_time, com)).second;
+            C = (C*j + lb_time) / (j+1);
+            (*search_in_linear_hashmap<int, int, 8>(com_ncall, com)).second = (int) std::sqrt(2*C/get_slope<double>(window.data_container));
+            std::cout << "slope: " << (int) get_slope<double>(window.data_container) << std::endl;
+
+        }
         stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
-        if(!my_rank)
-            print_load_statitics(stats);
+        if(!my_rank) print_load_statitics(stats);
     }
 
     MPI_Finalize();
