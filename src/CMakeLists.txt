@@ -12,7 +12,12 @@ include_directories(SYSTEM ${MPI_INCLUDE_PATH})
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-add_executable(adlbirreg main.cpp  Partition.cpp   Domain.cpp  Cell.cpp  GeometricUtils.cpp Communicator.cpp Utils.cpp DiffusiveOptimizer.cpp ../include/SlidingWindow.hpp)
+add_executable(adlbirreg main.cpp
+        Partition.cpp
+        Domain.cpp
+        Cell.cpp
+        GeometricUtils.cpp
+        Communicator.cpp Utils.cpp DiffusiveOptimizer.cpp ../include/SlidingWindow.hpp)
 
 add_executable(test_communcation comm.cpp Communicator.cpp)
 

@@ -11,6 +11,9 @@
 #include <Domain.hpp>
 #include <Cell.hpp>
 #include <SlidingWindow.hpp>
+#include <Utils.hpp>
+#include <SimulationParams.hpp>
+#include <CLIParser.hpp>
 
 int my_rank, world_size;
 
@@ -33,7 +36,7 @@ std::vector<Cell> generate_lattice_single_type( int msx, int msy,
     return my_cells;
 }
 
-namespace lb{
+namespace lb {
 
 struct GridElementComputer {
     double compute_load(const std::vector<Cell>& elements){
@@ -58,14 +61,76 @@ struct GridPointTransformer {
 
 }
 
+void generate_lattice_rocks(const int rocks_per_stripe, int msx, int msy,
+                            std::vector<Cell>* _cells,
+                            float erosion_probability,
+                            int begin_stripe, int end_stripe){
+    using Radius   = int;
+    using XPosition= int;
+    using YPosition= int;
 
+    int rank, size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    std::vector<Cell>& cells = *_cells;
+    std::vector<std::tuple<XPosition, YPosition, Radius>> rocks_data(rocks_per_stripe);
+
+    for (int i = 0; i < rocks_per_stripe; ++i) {
+//        rocks_data[i] = std::make_tuple((int) std::floor((i+1) * msx / (rocks_per_stripe+1)), (begin_stripe + end_stripe) * (3.0/4.0) : (begin_stripe + end_stripe) / 2, (end_stripe - begin_stripe) / 4);
+        rocks_data[i] = std::make_tuple((int) std::floor((i+1) * msx / (rocks_per_stripe+1)),
+                //rank == size-1 ? (begin_stripe + end_stripe) / 2 + (end_stripe - begin_stripe) / 4 : (begin_stripe + end_stripe) / 2, (end_stripe - begin_stripe) / 3);
+                                        (begin_stripe + end_stripe) / 2, (end_stripe - begin_stripe) / 3);
+    }
+
+    for(auto& cell : cells) {
+        int cx, cy, cr;
+        int gid = cell.gid;
+        auto pos = lb::cell_to_global_position(msx, msy, gid);
+        for(auto& rock : rocks_data){
+            std::tie(cx, cy, cr) = rock;
+            if(std::sqrt( std::pow(cx-pos.first, 2) + std::pow(cy - pos.second, 2) ) < cr) {
+                cell.type  = Cell::ROCK_TYPE;
+                cell.weight= 0.0;
+                cell.erosion_probability = erosion_probability;
+                break;
+            }
+        }
+    }
+}
+
+std::tuple<int, int, int> linear_to_grid(const long long index, const long long c, const long long r){
+    int x_idx = (int) (index % (c*r) % c);           // col
+    int y_idx = (int) std::floor(index % (c*r) / c); // row
+    int z_idx = (int) std::floor(index / (c*r));     // depth
+    assert(c==r);
+    assert(x_idx < c);
+    assert(y_idx < r);
+    assert(z_idx < r);
+    return std::make_tuple(x_idx, y_idx, z_idx);
+};
+
+std::pair<int, int> cell_to_global_position(int msx, int msy, long long position) {
+    return std::make_pair(position % msx, (int) position / msx);
+}
 
 int main(int argc, char** argv) {
+    int rank;
     MPI_Init(&argc, &argv);
-
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+    rank = my_rank;
+    auto cellDatatype = Cell::register_datatype().element_datatype;
 
+    SimulationParams params;
+    bool err;
+
+    std::tie(params, err) = parse_cli(argc, argv);
+
+    if (err) {
+        MPI_Abort(MPI_COMM_WORLD, MPI_ERR_UNKNOWN);
+        return EXIT_FAILURE;
+    }
     int procs_x = (int) std::cbrt(world_size),
         procs_y = procs_x,
         procs_z = procs_x;
@@ -84,6 +149,24 @@ int main(int argc, char** argv) {
     Cell::get_msy() = DOMAIN_SIZE_Y / d.grid_cell_size;
     Cell::get_msz() = DOMAIN_SIZE_Z / d.grid_cell_size;
     Cell::get_cell_size() = d.grid_cell_size;
+
+    const unsigned int xprocs = params.xprocs,
+                       yprocs = params.yprocs,
+                       zprocs = params.zprocs,
+                       cell_per_process = params.cell_per_process,
+                       MAX_STEP = params.MAX_STEP;
+
+    const int cell_in_my_rows = (int) std::sqrt(cell_per_process),
+              cell_in_my_cols = cell_in_my_rows,
+              cell_in_my_depth= cell_in_my_rows;
+
+    const int xcells = cell_in_my_rows  * xprocs,
+              ycells = cell_in_my_cols  * yprocs,
+              zcells = cell_in_my_depth * zprocs;
+
+    int& msx = Cell::get_msx(); msx = xcells;
+    int& msy = Cell::get_msy(); msy = ycells;
+
     auto datatype_wrapper = Cell::register_datatype();
     d.bootstrap_partitions(world_size);
 
@@ -92,17 +175,18 @@ int main(int argc, char** argv) {
 
     std::random_device rd{};
     std::mt19937 gen{rd()};
+
     std::normal_distribution<double> normal_distribution(1.0 + my_rank % 2, 0.2);
 
     int nb_cells_x = (DOMAIN_SIZE_X / (double) procs_x / (double) d.grid_cell_size);
     int nb_cells_y = (DOMAIN_SIZE_Y / (double) procs_y / (double) d.grid_cell_size);
     int nb_cells_z = (DOMAIN_SIZE_Z / (double) procs_z / (double) d.grid_cell_size);
 
-    auto cell_per_process = nb_cells_x * nb_cells_y * nb_cells_z;
+    int x_proc_idx, y_proc_idx, z_proc_idx;
+    lb::linear_to_grid(my_rank, procs_x, procs_y, x_proc_idx, y_proc_idx, z_proc_idx);
 
     std::vector<Cell> my_cells; my_cells.reserve(cell_per_process);
-
-    int x_proc_idx, y_proc_idx, z_proc_idx; lb::linear_to_grid(my_rank, procs_x, procs_y, x_proc_idx, y_proc_idx, z_proc_idx);
+    my_cells = generate_lattice_single_type(msx, msy, x_proc_idx, y_proc_idx, cell_in_my_cols, cell_in_my_rows, Cell::WATER_TYPE, 1.0, 0.0);
 
     const int total_cells_x = nb_cells_x * procs_x, total_cells_y = nb_cells_y * procs_y, total_cells_z = nb_cells_z * procs_z;
 
@@ -117,7 +201,6 @@ int main(int argc, char** argv) {
                 int gid = (x_shift + x) + (y_shift + y) * total_cells_x + (z_shift + z) * total_cells_x * total_cells_y;
                 my_cells.emplace_back(gid, 0, my_rank == 0 ? 10 : 1, 0.0);
             }
-
         }
     }
 
@@ -126,10 +209,7 @@ int main(int argc, char** argv) {
     auto stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
 
     if(!my_rank) print_load_statitics(stats);
-    /*for(int i = 0; i < world_size; ++i){
-        if(my_rank == i) io::scatterplot_3d_output<lb::GridPointTransformer>(i, "debug-domain-decomposition-"+std::to_string(0)+".dat", my_cells);
-        MPI_Barrier(MPI_COMM_WORLD);
-    }*/
+
     auto prev_imbalance = stats.global;
     double mu = 1.0;
 
@@ -139,9 +219,9 @@ int main(int argc, char** argv) {
     stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
     if(!my_rank)
         print_load_statitics(stats);
-    LinearHashMap<int, double, 8> com_lb_time;
+    LinearHashMap<int, std::vector<double>, 8> com_lb_time;
     std::transform(part.vertices_id.begin(), part.vertices_id.end(), com_lb_time.begin(),
-                   [](auto id){return std::make_pair(id, 0);});
+                   [](auto id){return std::make_pair(id, std::vector<double>());});
     std::array<SlidingWindow<double>, 8> arr_window = {
             SlidingWindow<double>(100), SlidingWindow<double>(100),
             SlidingWindow<double>(100), SlidingWindow<double>(100),
@@ -161,11 +241,9 @@ int main(int argc, char** argv) {
         std::vector<int> comm_workloads(communicator.comm_size, 0);
         int workload = my_cells.size();
         communicator.Allgather(&workload, 1, MPI_INT, comm_workloads.data(), 1, MPI_INT, vid);
-        SlidingWindow<double> window = arr_window[com];
+        SlidingWindow<double>& window = arr_window[com];
 
-        //std::cout << "max el " << *std::max_element(comm_workloads.begin(), comm_workloads.end()) << std::endl;
         window.add(*std::max_element(comm_workloads.begin(), comm_workloads.end()));
-        //std::cout << window.data_container.size() << std::endl;
         if(lb_decision) {
             auto start_time = MPI_Wtime();
             auto data = part.move_selected_vertices<lb::GridPointTransformer, lb::GridElementComputer, Cell>(
@@ -175,11 +253,12 @@ int main(int argc, char** argv) {
                     avg_load,                          // the average load
                     mu);                               // the movement factor
             auto lb_time = MPI_Wtime() - start_time;
-            auto& C = (*search_in_linear_hashmap<int, double, 8>(com_lb_time, com)).second;
-            C = (C*j + lb_time) / (j+1);
-            (*search_in_linear_hashmap<int, int, 8>(com_ncall, com)).second = (int) std::sqrt(2*C/get_slope<double>(window.data_container));
+            auto& C = (*search_in_linear_hashmap<int, std::vector<double>, 8>(com_lb_time, com)).second;
+            C.push_back(lb_time);
+            auto avg_lb_cost = mean<double>(C.begin(), C.end(), C.size());
+            (*search_in_linear_hashmap<int, int, 8>(com_ncall, com)).second = (int) std::sqrt(2*avg_lb_cost/get_slope<double>(window.data_container));
             std::cout << "slope: " << (int) get_slope<double>(window.data_container) << std::endl;
-
+            window.data_container.clear();
         }
         stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
         if(!my_rank) print_load_statitics(stats);

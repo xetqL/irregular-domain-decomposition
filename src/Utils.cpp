@@ -89,3 +89,18 @@ std::set<int> filter_active_neighbors(const std::array<int, 8>& vertices_id,
     return active_neighbors;
 }
 
+bool file_exists(const std::string fileName)
+{
+    std::ifstream infile(fileName);
+    return infile.good();
+}
+
+std::vector<std::string> split(const std::string& s, char delimiter) {
+    std::vector<std::string> tokens;
+    std::string token;
+    std::istringstream tokenStream(s);
+    while (std::getline(tokenStream, token, delimiter)) {
+        tokens.push_back(token);
+    }
+    return tokens;
+}

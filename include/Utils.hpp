@@ -14,6 +14,14 @@
 #include <set>
 #include "GeometricUtils.hpp"
 
+std::vector<std::string> split(const std::string& s, char delimiter);
+bool file_exists(const std::string fileName);
+
+template<class Numeric, class InputOp>
+Numeric mean(InputOp begin, InputOp end, int N){
+    return std::accumulate(begin, end, (Numeric) 0) / N;
+}
+
 template<typename Realtype, typename ContainerA>
 Realtype get_slope(const ContainerA& y){
     //std::cout << y.size() << std::endl;

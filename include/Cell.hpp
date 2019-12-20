@@ -9,6 +9,8 @@
 #include <Communicator.hpp>
 
 struct Cell {
+    static const int WATER_TYPE = 1;
+    static const int ROCK_TYPE  = 0;
     int gid, type; // type = -1:empty, 0:rock, 1:water
     float weight, erosion_probability;
     double average_load = 2000;
