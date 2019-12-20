@@ -21,18 +21,36 @@ inline int bitselect(int condition, int truereturnvalue, int falsereturnvalue) {
     return (truereturnvalue & -condition) | (falsereturnvalue & ~(-condition)); //a when TRUE and b when FintLSE
 }
 
-std::vector<Cell> generate_lattice_single_type( int msx, int msy,
-                                                int x_proc_idx, int y_proc_idx,
-                                                int cell_in_my_cols, int cell_in_my_rows,
+std::vector<Cell> generate_lattice_single_type( int msx, int msy, int msz,
+                                                int x_proc_idx, int y_proc_idx, int z_proc_idx,
+                                                int cell_in_my_cols, int cell_in_my_rows, int cell_in_my_depth,
                                                 int type, float weight, float erosion_probability) {
-    int cell_per_process = cell_in_my_cols * cell_in_my_rows;
-    std::vector<Cell> my_cells; my_cells.reserve(cell_per_process);
-    for(int j = 0; j < cell_in_my_cols; ++j) {
+
+    /*for(int j = 0; j < cell_in_my_cols; ++j) {
         for(int i = 0; i < cell_in_my_rows; ++i) {
-            int gid = cell_in_my_rows * x_proc_idx + i + msx * (j + (y_proc_idx * cell_in_my_cols));
-            my_cells.emplace_back(gid, type, weight, erosion_probability);
+            for(int k = 0; k < cell_in_my_depth; ++k) {
+                int gid = cell_in_my_rows * x_proc_idx + i + msx * (j + (y_proc_idx * cell_in_my_cols));
+                my_cells.emplace_back(gid, type, weight, erosion_probability);
+            }
         }
     }
+    */
+    int cell_per_process = cell_in_my_cols * cell_in_my_rows;
+    std::vector<Cell> my_cells; my_cells.reserve(cell_per_process);
+
+    auto x_shift = (cell_in_my_rows *  x_proc_idx);
+    auto y_shift = (cell_in_my_cols *  y_proc_idx);
+    auto z_shift = (cell_in_my_depth * z_proc_idx);
+
+    for(int z = 0; z < cell_in_my_depth; ++z) {
+        for(int y = 0; y < cell_in_my_cols; ++y) {
+            for(int x = 0; x < cell_in_my_rows; ++x) {
+                int gid = (x_shift + x) + (y_shift + y) * msx + (z_shift + z) * msx * msy;
+                my_cells.emplace_back(gid, 0, 1, 0.0);
+            }
+        }
+    }
+
     return my_cells;
 }
 
@@ -156,16 +174,17 @@ int main(int argc, char** argv) {
                        cell_per_process = params.cell_per_process,
                        MAX_STEP = params.MAX_STEP;
 
-    const int cell_in_my_rows = (int) std::sqrt(cell_per_process),
-              cell_in_my_cols = cell_in_my_rows,
-              cell_in_my_depth= cell_in_my_rows;
+    const int cell_in_my_rows  = (int) std::sqrt(cell_per_process),
+              cell_in_my_cols  = cell_in_my_rows,
+              cell_in_my_depth = cell_in_my_rows;
 
     const int xcells = cell_in_my_rows  * xprocs,
               ycells = cell_in_my_cols  * yprocs,
               zcells = cell_in_my_depth * zprocs;
 
-    int& msx = Cell::get_msx(); msx = xcells;
-    int& msy = Cell::get_msy(); msy = ycells;
+    int& msx = Cell::get_msx();
+    int& msy = Cell::get_msy();
+    int& msz = Cell::get_msz();
 
     auto datatype_wrapper = Cell::register_datatype();
     d.bootstrap_partitions(world_size);
@@ -173,7 +192,7 @@ int main(int argc, char** argv) {
     auto part = d.get_my_partition(my_rank);
     part.init_communicators(world_size);
 
-    std::random_device rd{};
+    std::random_device rd {};
     std::mt19937 gen{rd()};
 
     std::normal_distribution<double> normal_distribution(1.0 + my_rank % 2, 0.2);
@@ -186,15 +205,15 @@ int main(int argc, char** argv) {
     lb::linear_to_grid(my_rank, procs_x, procs_y, x_proc_idx, y_proc_idx, z_proc_idx);
 
     std::vector<Cell> my_cells; my_cells.reserve(cell_per_process);
-    my_cells = generate_lattice_single_type(msx, msy, x_proc_idx, y_proc_idx, cell_in_my_cols, cell_in_my_rows, Cell::WATER_TYPE, 1.0, 0.0);
-
+    my_cells = generate_lattice_single_type(msx, msy, msz, x_proc_idx, y_proc_idx, z_proc_idx, cell_in_my_cols, cell_in_my_rows, cell_in_my_depth, Cell::WATER_TYPE, 1.0, 0.0);
+/*
     const int total_cells_x = nb_cells_x * procs_x, total_cells_y = nb_cells_y * procs_y, total_cells_z = nb_cells_z * procs_z;
 
     auto x_shift = (nb_cells_x * x_proc_idx);
     auto y_shift = (nb_cells_y * y_proc_idx);
     auto z_shift = (nb_cells_z * z_proc_idx);
-    lb::GridPointTransformer gpt;
 
+    lb::GridPointTransformer gpt;
     for(int z = 0; z < nb_cells_z; ++z) {
         for(int y = 0; y < nb_cells_y; ++y) {
             for(int x = 0; x < nb_cells_x; ++x) {
@@ -203,9 +222,9 @@ int main(int argc, char** argv) {
             }
         }
     }
+*/
 
-    //return 0;
-    //std::cout << "BEFORE: " << part.get_load_imbalance<GridElementComputer>(my_cells) << std::endl;
+
     auto stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
 
     if(!my_rank) print_load_statitics(stats);

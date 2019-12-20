@@ -5,7 +5,7 @@
 #include "CLIParser.hpp"
 
 std::pair<SimulationParams, bool>  parse_cli(int argc, char** argv) {
-    unsigned int xprocs, yprocs;
+    unsigned int xprocs, yprocs, zprocs;
     unsigned int cell_per_process;
     unsigned int MAX_STEP, interval = 100;
     int seed;
@@ -20,6 +20,7 @@ std::pair<SimulationParams, bool>  parse_cli(int argc, char** argv) {
 
     parser.add_opt_value('x', "xprocs", xprocs, (unsigned int) 0, "set the number of PE in x dimension", "INT").require(); // require this option
     parser.add_opt_value('y', "yprocs", yprocs, (unsigned int) 0, "set the number of PE in y dimension", "INT").require(); // require this option
+    parser.add_opt_value('z', "zprocs", zprocs, (unsigned int) 0, "set the number of PE in z dimension", "INT").require(); // require this option
     parser.add_opt_value('c', "cellPerCPU", cell_per_process, (unsigned int) 0, "set the number of cell per CPU must be a perfect square", "INT").require(); // require this option
     parser.add_opt_value('N', "overloading", N, (unsigned int) 0, "set the number of overloading CPU", "INT").require(); // require this option
     parser.add_opt_value('t', "steps", MAX_STEP, (unsigned int) 0,"set the number of PE in y dimension", "INT").require(); // require this option
@@ -43,9 +44,8 @@ std::pair<SimulationParams, bool>  parse_cli(int argc, char** argv) {
         std::cout << parser.get_help() << std::endl;
         return std::make_pair<SimulationParams>({}, true);
     } else {
-        SimulationParams p = {xprocs, yprocs, N, MAX_STEP, cell_per_process, interval, seed, load_lattice, verbose, lattice_fname, outputfname};
+        SimulationParams p = {xprocs, yprocs, zprocs, N, MAX_STEP, cell_per_process, interval, seed, load_lattice, verbose, lattice_fname, outputfname};
         p.alpha = alpha;
         return {p, false};
-   
     }
 }

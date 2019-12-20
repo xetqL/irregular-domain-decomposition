@@ -17,7 +17,7 @@ add_executable(adlbirreg main.cpp
         Domain.cpp
         Cell.cpp
         GeometricUtils.cpp
-        Communicator.cpp Utils.cpp DiffusiveOptimizer.cpp ../include/SlidingWindow.hpp)
+        Communicator.cpp Utils.cpp DiffusiveOptimizer.cpp zupply.cpp CLIParser.cpp)
 
 add_executable(test_communcation comm.cpp Communicator.cpp)
 
