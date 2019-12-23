@@ -18,15 +18,22 @@ std::vector<std::string> split(const std::string& s, char delimiter);
 bool file_exists(const std::string fileName);
 
 template<class Numeric, class InputOp>
-Numeric mean(InputOp begin, InputOp end, int N){
-    return std::accumulate(begin, end, (Numeric) 0) / N;
+Numeric mean(InputOp begin, InputOp end, int N) {
+    return std::accumulate(begin, end, (Numeric) 0.0) / N;
+}
+
+template<class Numeric, class Container>
+Numeric mean(Container container, int N) {
+    Numeric acc = 0;
+    for(Numeric v : container) acc += v;
+    return acc / N;
 }
 
 template<typename Realtype, typename ContainerA>
-Realtype get_slope(const ContainerA& y){
+Realtype get_slope(const ContainerA& y) {
     //std::cout << y.size() << std::endl;
     std::vector<Realtype> x(y.size());
-    std::iota(x.begin(),x.end(), 0);
+    std::iota(x.begin(), x.end(), 0);
 
     int n = x.size();
 
@@ -43,6 +50,7 @@ Realtype get_slope(const ContainerA& y){
 
     return denominator == 0 ? (Realtype) 0 : numerator / denominator;
 }
+
 template<class K, class V, int N>
 using LinearHashMap = std::array<std::pair<K, V>, N>;
 

@@ -149,9 +149,8 @@ int main(int argc, char** argv) {
         MPI_Abort(MPI_COMM_WORLD, MPI_ERR_UNKNOWN);
         return EXIT_FAILURE;
     }
-    int procs_x = (int) std::cbrt(world_size),
-        procs_y = procs_x,
-        procs_z = procs_x;
+
+
 
     const int DOMAIN_SIZE_X = 10;
     const int DOMAIN_SIZE_Y = 10;
@@ -159,22 +158,19 @@ int main(int argc, char** argv) {
 
     lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z);
 
-    d.grid_cell_size = std::atof(argv[1]);
-    int MAX_ITER     = std::atoi(argv[2]);
-
-
-    Cell::get_msx() = DOMAIN_SIZE_X / d.grid_cell_size;
-    Cell::get_msy() = DOMAIN_SIZE_Y / d.grid_cell_size;
-    Cell::get_msz() = DOMAIN_SIZE_Z / d.grid_cell_size;
-    Cell::get_cell_size() = d.grid_cell_size;
-
+    //d.grid_cell_size = std::atof(argv[1]);
+    //int MAX_ITER     = std::atoi(argv[2]);
+    int procs_x = params.xprocs,
+            procs_y = params.yprocs,
+            procs_z = params.zprocs;
     const unsigned int xprocs = params.xprocs,
                        yprocs = params.yprocs,
                        zprocs = params.zprocs,
                        cell_per_process = params.cell_per_process,
-                       MAX_STEP = params.MAX_STEP;
+                       MAX_ITER = params.MAX_STEP;
 
-    const int cell_in_my_rows  = (int) std::sqrt(cell_per_process),
+    assert(procs_x * procs_y * procs_z == world_size);
+    const int cell_in_my_rows  = (int) std::cbrt(cell_per_process),
               cell_in_my_cols  = cell_in_my_rows,
               cell_in_my_depth = cell_in_my_rows;
 
@@ -182,9 +178,15 @@ int main(int argc, char** argv) {
               ycells = cell_in_my_cols  * yprocs,
               zcells = cell_in_my_depth * zprocs;
 
+    Cell::get_msx() = xcells;
+    Cell::get_msy() = ycells;
+    Cell::get_msz() = zcells;
+
     int& msx = Cell::get_msx();
     int& msy = Cell::get_msy();
     int& msz = Cell::get_msz();
+
+    Cell::get_cell_size() = DOMAIN_SIZE_X / xcells;
 
     auto datatype_wrapper = Cell::register_datatype();
     d.bootstrap_partitions(world_size);
@@ -205,25 +207,8 @@ int main(int argc, char** argv) {
     lb::linear_to_grid(my_rank, procs_x, procs_y, x_proc_idx, y_proc_idx, z_proc_idx);
 
     std::vector<Cell> my_cells; my_cells.reserve(cell_per_process);
+
     my_cells = generate_lattice_single_type(msx, msy, msz, x_proc_idx, y_proc_idx, z_proc_idx, cell_in_my_cols, cell_in_my_rows, cell_in_my_depth, Cell::WATER_TYPE, 1.0, 0.0);
-/*
-    const int total_cells_x = nb_cells_x * procs_x, total_cells_y = nb_cells_y * procs_y, total_cells_z = nb_cells_z * procs_z;
-
-    auto x_shift = (nb_cells_x * x_proc_idx);
-    auto y_shift = (nb_cells_y * y_proc_idx);
-    auto z_shift = (nb_cells_z * z_proc_idx);
-
-    lb::GridPointTransformer gpt;
-    for(int z = 0; z < nb_cells_z; ++z) {
-        for(int y = 0; y < nb_cells_y; ++y) {
-            for(int x = 0; x < nb_cells_x; ++x) {
-                int gid = (x_shift + x) + (y_shift + y) * total_cells_x + (z_shift + z) * total_cells_x * total_cells_y;
-                my_cells.emplace_back(gid, 0, my_rank == 0 ? 10 : 1, 0.0);
-            }
-        }
-    }
-*/
-
 
     auto stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
 
@@ -253,6 +238,7 @@ int main(int argc, char** argv) {
     bool lb_decision = false;
     int pcall = 0;
     for(int j = 0; j < MAX_ITER; ++j) {
+
         int com = lb::translate_iteration_to_vertex_group(j, part.coord);
         lb_decision = pcall + (*search_in_linear_hashmap<int, int, 8>(com_ncall, com)).second >= j;
         auto vid = part.vertices_id[com];
@@ -263,6 +249,7 @@ int main(int argc, char** argv) {
         SlidingWindow<double>& window = arr_window[com];
 
         window.add(*std::max_element(comm_workloads.begin(), comm_workloads.end()));
+
         if(lb_decision) {
             auto start_time = MPI_Wtime();
             auto data = part.move_selected_vertices<lb::GridPointTransformer, lb::GridElementComputer, Cell>(
@@ -272,15 +259,27 @@ int main(int argc, char** argv) {
                     avg_load,                          // the average load
                     mu);                               // the movement factor
             auto lb_time = MPI_Wtime() - start_time;
-            auto& C = (*search_in_linear_hashmap<int, std::vector<double>, 8>(com_lb_time, com)).second;
+            //(*search_in_linear_hashmap<int, std::vector<double>, 8>(com_lb_time, com)).second.push_back(lb_time);
+            auto C = (*search_in_linear_hashmap<int, std::vector<double>, 8>(com_lb_time, com)).second;
             C.push_back(lb_time);
-            auto avg_lb_cost = mean<double>(C.begin(), C.end(), C.size());
-            (*search_in_linear_hashmap<int, int, 8>(com_ncall, com)).second = (int) std::sqrt(2*avg_lb_cost/get_slope<double>(window.data_container));
+            std::for_each(C.cbegin(), C.cend(), [&](auto v){std::cout << "->"<< v << std::endl;});
+            //std::for_each(C2.cbegin(), C2.cend(), [&](auto v){std::cout << v << std::endl;});
+            auto avg_lb_cost = std::accumulate(C.begin(), C.end(), 0) / C.size();
+            std::cout << avg_lb_cost << std::endl;
+            auto tau = (int) std::sqrt(2*avg_lb_cost/get_slope<double>(window.data_container));
+            std::cout << tau << std::endl;
+
+
+            (*search_in_linear_hashmap<int, int, 8>(com_ncall, com)).second = tau;
+
             std::cout << "slope: " << (int) get_slope<double>(window.data_container) << std::endl;
             window.data_container.clear();
         }
         stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
-        if(!my_rank) print_load_statitics(stats);
+        if(!my_rank) {
+            std::cout << "Iteration " << j << std::endl;
+            print_load_statitics(stats);
+        }
     }
 
     MPI_Finalize();
