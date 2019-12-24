@@ -132,25 +132,104 @@ public:
     }
 
     template<class CartesianPointTransformer, class A>
-    void move_data(const std::vector<A>& elements) {
-        CartesianPointTransformer c;
-        std::array<std::vector<A>, 26> to_move;
-        const auto size = elements.size();
-        std::vector<std::pair<Plane_3 , int>> ghosts;
-        for(int i = 0; i < size; ++i) {
-            const auto& e = elements.at(i);
-            auto closest_planes = find_planes_closer_than(planes, c.transform(elements[i]), sqrt_3*grid_size);
+    void move_data(std::vector<A>& elements, MPI_Datatype datatype) {
+        CartesianPointTransformer transformer;
+        get_MPI_rank(my_rank);
+        get_MPI_worldsize(worldsize);
+        const auto my_domain = this->serialize();
+        const auto number_of_neighbors = worldsize;
+        std::vector<int> active_neighbors(worldsize);
+        std::iota(active_neighbors.begin(), active_neighbors.end(), 0);
+        std::vector<std::pair<ProcRank, std::vector<A>>>  migration_and_destination(number_of_neighbors);
+        std::vector<std::pair<ProcRank, std::vector<DataIndex>>> neighbor_ghosts(number_of_neighbors);
 
-            if(closest_planes.size() > 0) {
-                ghosts.push_back(std::make_pair(closest_planes, i));
-            }
+        std::transform(active_neighbors.begin(), active_neighbors.end(), migration_and_destination.begin(),
+                       [](ProcRank i){ return std::make_pair(i, std::vector<A>()); });
+        std::transform(active_neighbors.begin(), active_neighbors.end(), neighbor_ghosts.begin(),
+                       [](ProcRank i){ return std::make_pair(i, std::vector<DataIndex>()); });
 
-            if(this->contains(c.transform(e))) {
+        std::vector<double> recv_buff(active_neighbors.size()*8*3);
+        std::vector<MPI_Request> srequests(active_neighbors.size()), rrequests(active_neighbors.size());
 
-            } else {
-
+        {
+            int i = 0;
+            for(ProcRank neighbor_rank : active_neighbors) {
+                MPI_Isend(my_domain.data(), 24, MPI_DOUBLE, neighbor_rank, 9999, MPI_COMM_WORLD, &srequests[i]);
+                MPI_Irecv((recv_buff.data() + i * 24), 24, MPI_DOUBLE, neighbor_rank, 9999, MPI_COMM_WORLD, &rrequests[i]);
+                i++;
             }
         }
+
+        MPI_Waitall(number_of_neighbors, rrequests.data(), MPI_STATUSES_IGNORE);
+        MPI_Waitall(number_of_neighbors, srequests.data(), MPI_STATUSES_IGNORE);
+
+        std::vector<Partition> neighborhoods;
+        for(int i = 0; i < number_of_neighbors; ++i) {
+            // building neighborhood of vertex
+            neighborhoods.emplace_back(coord, d, grid_size, (recv_buff.begin() + i * 24));
+        }
+
+        //TAG MY DATA
+        int DBG_RANK = 7;
+        //const auto nb_elements = elements.size();
+        size_t data_id = 0;
+        size_t nb_migrate = 0;
+        double sent_load = 0;
+        while(data_id < elements.size()) {
+            auto point = transformer.transform(elements[data_id]);
+            bool is_real_cell = this->contains(point);
+            auto closest_planes = find_planes_closer_than(planes, point, sqrt_3*grid_size);
+            //if(!is_real_cell){ // transfer data to neighbor
+                for(int nid = 0; nid < number_of_neighbors; ++nid) {
+                    const auto neighbor_rank = migration_and_destination[nid].first;
+                    if(neighbor_rank < 0 || neighbor_rank == my_rank) continue;
+                    const auto& neighborhood_domains = neighborhoods[nid];
+                    if(neighborhood_domains.contains(point)) {
+                        std::cout << "Transferring " << point << " to " << neighbor_rank << std::endl;
+                        migration_and_destination[nid].second.push_back(elements[data_id]);
+                        std::iter_swap(elements.begin() + data_id, elements.end() - 1);
+                        elements.pop_back();
+                        nb_migrate++;
+                        break;
+                    }
+                }
+            //} else {
+            //    // those are my data
+            //}
+            data_id++;
+        }
+
+        //std::cout << "Transfer " << sent_load << " to "<< DBG_RANK << std::endl;
+        //std::cout << my_rank << " transferred " << nb_migrate << std::endl;
+
+        {
+            //migrate the data
+            std::vector<MPI_Request> srequests(number_of_neighbors);
+            for(int nid = 0; nid < number_of_neighbors; ++nid) {
+                int dest_rank = migration_and_destination[nid].first;
+                assert(migration_and_destination[nid].second.size() == 0 || dest_rank != my_rank);
+                MPI_Isend(migration_and_destination[nid].second.data(),
+                          migration_and_destination[nid].second.size(), datatype, dest_rank, 101010, MPI_COMM_WORLD, &srequests[nid]);
+            }
+
+            std::vector<A> buf;
+            double recv_load = 0;
+            for(int nid = 0; nid < number_of_neighbors; ++nid) {
+                int dest_rank = migration_and_destination[nid].first;
+                MPI_Status status; MPI_Probe(dest_rank, 101010, MPI_COMM_WORLD, &status);
+                int count;
+                MPI_Get_count(&status, datatype, &count);
+                buf.resize(count);
+                MPI_Recv(buf.data(), count, datatype, dest_rank, 101010, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                recv_load += count;
+                std::move(buf.begin(), buf.end(), std::back_inserter(elements));
+            }
+#ifdef DEBUG
+            std::cout << my_rank << " received " << recv_load << std::endl;
+#endif
+            MPI_Waitall(number_of_neighbors, srequests.data(), MPI_STATUSES_IGNORE);
+        }
+
     }
 
     template<class CartesianPointTransformer, class A>
@@ -378,13 +457,7 @@ public:
         std::vector<double> recv_buff(active_neighbors.size()*8*3);
         std::vector<MPI_Request> srequests(active_neighbors.size()), rrequests(active_neighbors.size());
 
-        //TODO: This creates a deadlock. People are leaving the parallel section, therefore, we should not spread domain
-        // data to every neighbors. Instead, we have to create the list of active neighbors as function of the vertex
-        // remaining trials array and the list of neighbors by vertex id from the communicator. Furthermore, we need a mock
-        // partition that respond false to every contains() call to avoid distinguishing active/inactive partition.
-
         {
-
             int i = 0;
             for(ProcRank neighbor_rank : active_neighbors) {
                 MPI_Isend(my_domain.data(), 24, MPI_DOUBLE, neighbor_rank, 9999, MPI_COMM_WORLD, &srequests[i]);
@@ -516,19 +589,24 @@ public:
         auto loads = get_neighbors_load(my_load, vid, communicator).second;
 
         auto center_of_load = get_center_of_load(weights, points);
-
+#ifdef DEBUG
+        std::cout << my_rank << " center of load is " << center_of_load << std::endl;
+#endif
         std::pair<VertIndex, std::vector<Point_3>> cls = spread_centers_of_load(center_of_load, vid, communicator);
 
         const int MAX_TRIAL = 3;
 
         if(communicator.comm_size > 1) {
 #ifdef DEBUG
-            std::cout << my_rank << " tries to move vertex " << vid << " with comm_size "<< communicator.comm_size<< std::endl;
+            std::cout << my_rank << " tries to move vertex " << vid << " with comm_size "<< communicator.comm_size << std::endl;
 #endif
             std::vector<double> normalized_loads;
             std::transform(loads.cbegin(), loads.cend(), std::back_inserter(normalized_loads), [&avg_load](auto n){return n/avg_load;});
             auto f1  = -get_vertex_force(v, cls.second, normalized_loads);
             auto f1_after = constraint_force(d, v, f1);
+#ifdef DEBUG
+            std::cout << my_rank << " vertex force is "<< f1_after << std::endl;
+#endif
             int are_all_valid = false;
             for(int trial = 0; trial < MAX_TRIAL; ++trial) {
                 auto new_vertices = vertices;
@@ -637,7 +715,9 @@ public:
             }
             data_id++;
         }
-
+#ifdef DEBUG
+        std::cout << my_rank << " transferred " << nb_migrate  << std::endl;
+#endif
         //std::cout << "Transfer " << sent_load << " to "<< DBG_RANK << std::endl;
         //std::cout << my_rank << " transferred " << nb_migrate << std::endl;
 
@@ -668,7 +748,7 @@ public:
 #endif
             MPI_Waitall(number_of_neighbors, srequests.data(), MPI_STATUSES_IGNORE);
 #ifdef DEBUG
-            std::cout << my_rank << " leaves move_vertices(...); " << recv_load << std::endl;
+            std::cout << my_rank << " leaves " << __func__ << std::endl;
 #endif
         }
         return neighbor_ghosts;

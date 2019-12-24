@@ -74,9 +74,11 @@ Point_3 get_center_of_load(const std::vector<double>& weights, const std::vector
 
     return Point_3(xcm / total_mass, ycm / total_mass, zcm / total_mass);
 }
+
 double compute_normalized_load(double my_load, double unit) {
     return my_load / unit;
 }
+
 Vector_3 get_vertex_force(const Point_3& vertex, const std::vector<Point_3>& centers_of_load, const std::vector<double>& normalized_loads) {
     Vector_3 f(0,0,0);
     const auto size = centers_of_load.size();

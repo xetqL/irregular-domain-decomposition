@@ -31,7 +31,7 @@ struct Cell {
     std::tuple<int, int, int> get_position_as_pair() const {
         int x,y,z;
         lb::linear_to_grid(gid, Cell::get_msx(), Cell::get_msy(), x, y, z); //cell_to_global_position(Cell::get_msx(), Cell::get_msy(), gid);
-        return std::make_tuple(x,y,z);
+        return std::make_tuple(x, y, z);
     }
 
     std::tuple<double, double, double> get_center() const {
@@ -110,7 +110,9 @@ struct Cell {
     }
 
     friend std::ostream &operator<<(std::ostream &os, const Cell &cell) {
-        os << "gid: " << cell.gid << " type: " << cell.type << " weight: " << cell.weight << " erosion_probability: "
+        double x,y,z;
+        std::tie(x,y,z) = cell.get_center();
+        os << "gid: " << cell.gid << " ("<<x<<";"<<y<<";"<<z <<") type: " << cell.type << " weight: " << cell.weight << " erosion_probability: "
            << cell.erosion_probability;
         return os;
     }

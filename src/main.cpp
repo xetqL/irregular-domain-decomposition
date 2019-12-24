@@ -26,15 +26,6 @@ std::vector<Cell> generate_lattice_single_type( int msx, int msy, int msz,
                                                 int cell_in_my_cols, int cell_in_my_rows, int cell_in_my_depth,
                                                 int type, float weight, float erosion_probability) {
 
-    /*for(int j = 0; j < cell_in_my_cols; ++j) {
-        for(int i = 0; i < cell_in_my_rows; ++i) {
-            for(int k = 0; k < cell_in_my_depth; ++k) {
-                int gid = cell_in_my_rows * x_proc_idx + i + msx * (j + (y_proc_idx * cell_in_my_cols));
-                my_cells.emplace_back(gid, type, weight, erosion_probability);
-            }
-        }
-    }
-    */
     int cell_per_process = cell_in_my_cols * cell_in_my_rows;
     std::vector<Cell> my_cells; my_cells.reserve(cell_per_process);
 
@@ -46,7 +37,7 @@ std::vector<Cell> generate_lattice_single_type( int msx, int msy, int msz,
         for(int y = 0; y < cell_in_my_cols; ++y) {
             for(int x = 0; x < cell_in_my_rows; ++x) {
                 int gid = (x_shift + x) + (y_shift + y) * msx + (z_shift + z) * msx * msy;
-                my_cells.emplace_back(gid, 0, 1, 0.0);
+                my_cells.emplace_back(gid, type, weight, erosion_probability);
             }
         }
     }
@@ -150,8 +141,6 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
-
-
     const int DOMAIN_SIZE_X = 10;
     const int DOMAIN_SIZE_Y = 10;
     const int DOMAIN_SIZE_Z = 10;
@@ -185,8 +174,11 @@ int main(int argc, char** argv) {
     int& msx = Cell::get_msx();
     int& msy = Cell::get_msy();
     int& msz = Cell::get_msz();
+    Cell::get_cell_size() = (double) DOMAIN_SIZE_X / (double) xcells;
 
-    Cell::get_cell_size() = DOMAIN_SIZE_X / xcells;
+    std::cout << "Cell number (X,Y,Z) = (" << msx<<","<<msy<<","<<msz<<")"<< std::endl;
+    std::cout << "Cell size = " << Cell::get_cell_size() << std::endl;
+    std::cout << "Domain size X = "<< (cell_in_my_rows  * xprocs * Cell::get_cell_size()) << std::endl;
 
     auto datatype_wrapper = Cell::register_datatype();
     d.bootstrap_partitions(world_size);
@@ -220,12 +212,11 @@ int main(int argc, char** argv) {
     auto all_loads = get_neighbors_load(stats.my_load, MPI_COMM_WORLD); //global load balancing with MPI_COMM_WORLD
     auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / world_size;
 
-    stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
-    if(!my_rank)
-        print_load_statitics(stats);
+
     LinearHashMap<int, std::vector<double>, 8> com_lb_time;
     std::transform(part.vertices_id.begin(), part.vertices_id.end(), com_lb_time.begin(),
                    [](auto id){return std::make_pair(id, std::vector<double>());});
+
     std::array<SlidingWindow<double>, 8> arr_window = {
             SlidingWindow<double>(100), SlidingWindow<double>(100),
             SlidingWindow<double>(100), SlidingWindow<double>(100),
@@ -236,11 +227,21 @@ int main(int argc, char** argv) {
     std::transform(part.vertices_id.begin(), part.vertices_id.end(), com_ncall.begin(),
                    [](auto id){return std::make_pair(id, 0);});
     bool lb_decision = false;
+    std::for_each(my_cells.cbegin(), my_cells.cend(), [&](auto v){std::cout << v << std::endl;});
+    part.move_data<lb::GridPointTransformer, Cell>(my_cells, datatype_wrapper.element_datatype);
+    MPI_Barrier(MPI_COMM_WORLD);
+    stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
+    if(!my_rank)
+    {
+        print_load_statitics(stats);
+        std::cout << part << std::endl;
+    }
+
+
     int pcall = 0;
     for(int j = 0; j < MAX_ITER; ++j) {
-
+        std::cout << "START ITERATION NUMBER " << j << std::endl;
         int com = lb::translate_iteration_to_vertex_group(j, part.coord);
-        lb_decision = pcall + (*search_in_linear_hashmap<int, int, 8>(com_ncall, com)).second >= j;
         auto vid = part.vertices_id[com];
         const auto& communicator = part.vertex_neighborhood[vid];
         std::vector<int> comm_workloads(communicator.comm_size, 0);
@@ -250,12 +251,13 @@ int main(int argc, char** argv) {
 
         window.add(*std::max_element(comm_workloads.begin(), comm_workloads.end()));
 
+        lb_decision = true;//pcall + (*search_in_linear_hashmap<int, int, 8>(com_ncall, com)).second >= j;
         if(lb_decision) {
             auto start_time = MPI_Wtime();
             auto data = part.move_selected_vertices<lb::GridPointTransformer, lb::GridElementComputer, Cell>(
                     j,                                 // the groups that moves
                     my_cells,                          // the data to LB
-                    datatype_wrapper.element_datatype, // the data associated with the data
+                    datatype_wrapper.element_datatype, // the datatype associated with the data
                     avg_load,                          // the average load
                     mu);                               // the movement factor
             auto lb_time = MPI_Wtime() - start_time;
@@ -267,12 +269,15 @@ int main(int argc, char** argv) {
             auto avg_lb_cost = std::accumulate(C.begin(), C.end(), 0) / C.size();
             std::cout << avg_lb_cost << std::endl;
             auto tau = (int) std::sqrt(2*avg_lb_cost/get_slope<double>(window.data_container));
-            std::cout << tau << std::endl;
+            tau = 1;
+            if(tau < 0) tau = MAX_ITER+1;
 
+            std::cout << tau << std::endl;
 
             (*search_in_linear_hashmap<int, int, 8>(com_ncall, com)).second = tau;
 
             std::cout << "slope: " << (int) get_slope<double>(window.data_container) << std::endl;
+            std::cout << "tau: " << (*search_in_linear_hashmap<int, int, 8>(com_ncall, com)).second << std::endl;
             window.data_container.clear();
         }
         stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
