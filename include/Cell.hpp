@@ -116,6 +116,10 @@ struct Cell {
            << cell.erosion_probability;
         return os;
     }
+
+    void increase_weight(float v){
+        this->weight+=v;
+    }
 };
 
 #endif //ADLBIRREG_CELL_HPP
