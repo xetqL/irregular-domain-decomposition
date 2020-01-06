@@ -12,6 +12,7 @@ include_directories(SYSTEM ${MPI_INCLUDE_PATH})
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+
 add_executable(adlbirreg main.cpp
         Partition.cpp
         Domain.cpp
@@ -32,4 +33,7 @@ target_compile_definitions(adlbirreg PRIVATE CGAL_DISABLE_ROUNDING_MATH_CHECK=ON
 IF(CMAKE_BUILD_TYPE MATCHES Debug)
     message("Debug on")
     target_compile_definitions(adlbirreg PUBLIC DEBUG=True)
+ELSE()
+    message("-O3 on")
+    add_definitions("-O3")
 ENDIF(CMAKE_BUILD_TYPE MATCHES Debug)

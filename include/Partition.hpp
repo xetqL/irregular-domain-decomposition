@@ -106,9 +106,10 @@ public:
         planes =  get_planes(vertices);
     }
 
-    bool contains(const Point_3& p) const {
+    inline bool contains(const Point_3& p) const {
         return in_tetrahedron(tetrahedra[0], p) || in_tetrahedron(tetrahedra[1], p) || in_tetrahedron(tetrahedra[2], p) || in_tetrahedron(tetrahedra[3], p) || in_tetrahedron(tetrahedra[4], p) || in_tetrahedron(tetrahedra[5], p);
     }
+
     template<class CartesianPointTransformer, class A>
     bool is_ghost(const CartesianPointTransformer& c, const A& p) {
         return is_ghost(c.transform(p));
@@ -170,7 +171,6 @@ public:
         }
 
         //TAG MY DATA
-        int DBG_RANK = 7;
         //const auto nb_elements = elements.size();
         size_t data_id = 0;
         size_t nb_migrate = 0;
@@ -178,24 +178,19 @@ public:
         while(data_id < elements.size()) {
             auto point = transformer.transform(elements[data_id]);
             bool is_real_cell = this->contains(point);
-            auto closest_planes = find_planes_closer_than(planes, point, sqrt_3*grid_size);
-            //if(!is_real_cell){ // transfer data to neighbor
-                for(int nid = 0; nid < number_of_neighbors; ++nid) {
-                    const auto neighbor_rank = migration_and_destination[nid].first;
-                    if(neighbor_rank < 0 || neighbor_rank == my_rank) continue;
-                    const auto& neighborhood_domains = neighborhoods[nid];
-                    if(neighborhood_domains.contains(point)) {
-                        std::cout << "Transferring " << point << " to " << neighbor_rank << std::endl;
-                        migration_and_destination[nid].second.push_back(elements[data_id]);
-                        std::iter_swap(elements.begin() + data_id, elements.end() - 1);
-                        elements.pop_back();
-                        nb_migrate++;
-                        break;
-                    }
+            for(int nid = 0; nid < number_of_neighbors; ++nid) {
+                const auto neighbor_rank = migration_and_destination[nid].first;
+                if(neighbor_rank < 0 || neighbor_rank == my_rank) continue;
+                const auto& neighborhood_domains = neighborhoods[nid];
+                if(neighborhood_domains.contains(point)) {
+                    std::cout << "Transferring " << point << " to " << neighbor_rank << std::endl;
+                    migration_and_destination[nid].second.push_back(elements[data_id]);
+                    std::iter_swap(elements.begin() + data_id, elements.end() - 1);
+                    elements.pop_back();
+                    nb_migrate++;
+                    break;
                 }
-            //} else {
-            //    // those are my data
-            //}
+            }
             data_id++;
         }
 
@@ -229,7 +224,6 @@ public:
 #endif
             MPI_Waitall(number_of_neighbors, srequests.data(), MPI_STATUSES_IGNORE);
         }
-
     }
 
     template<class CartesianPointTransformer, class A>
@@ -681,7 +675,7 @@ public:
             auto point = transformer.transform(elements[data_id]);
             bool is_real_cell = this->contains(point);
 
-            auto closest_planes = find_planes_closer_than(planes, point, sqrt_3*grid_size);
+            //auto closest_planes = find_planes_closer_than(planes, point, sqrt_3*grid_size);
             /*if(closest_planes.size() > 0 && is_real_cell) { // IS A NEIGHBORING CELL, i will move it to the proc that share the closest planes
                 for(int nid = 0; nid < number_of_neighbors; ++nid) {
                     const auto& neighborhood_domains = neighborhoods[nid];
@@ -695,7 +689,7 @@ public:
                         neighbor_ghosts[nid].second.push_back(data_id);
                     }
                 }
-            } else*/ if(!is_real_cell){ // transfer data to neighbor
+            } else*/ if(!is_real_cell) { // transfer data to neighbor
                 //throw std::runtime_error("?");
                 for(int nid = 0; nid < number_of_neighbors; ++nid) {
                     const auto neighbor_rank = migration_and_destination[nid].first;
@@ -710,8 +704,6 @@ public:
                         break;
                     }
                 }
-            } else {
-                // those are my data
             }
             data_id++;
         }
@@ -726,7 +718,9 @@ public:
             std::vector<MPI_Request> srequests(number_of_neighbors);
             for(int nid = 0; nid < number_of_neighbors; ++nid) {
                 int dest_rank = migration_and_destination[nid].first;
+#ifdef DEBUG
                 assert(migration_and_destination[nid].second.size() == 0 | dest_rank != my_rank);
+#endif
                 MPI_Isend(migration_and_destination[nid].second.data(),
                           migration_and_destination[nid].second.size(), datatype, dest_rank, 101010, MPI_COMM_WORLD, &srequests[nid]);
             }

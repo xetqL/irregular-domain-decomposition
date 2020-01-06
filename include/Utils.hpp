@@ -35,7 +35,7 @@ Realtype get_slope(const ContainerA& y) {
     std::vector<Realtype> x(y.size());
     std::iota(x.begin(), x.end(), 0);
 
-    int n = x.size();
+    double n = x.size();
 
     Realtype avgX = std::accumulate(x.begin(), x.end(), 0.0) / n;
     Realtype avgY = std::accumulate(y.begin(), y.end(), 0.0) / n;
@@ -49,6 +49,25 @@ Realtype get_slope(const ContainerA& y) {
     }
 
     return denominator == 0 ? (Realtype) 0 : numerator / denominator;
+}
+
+template<class RealType, class Iter>
+inline RealType mean(Iter b, Iter e) {
+    const long N = std::distance(b, e);
+    if(N > 0)
+        return std::accumulate(b, e, (RealType) 0.0) / N;
+    else
+        return (RealType) 0.0;
+}
+
+template<class Realtype, class Iter>
+Realtype median(Iter begin, Iter  end) {
+    std::vector<typename Iter::value_type> tmp(begin, end);
+    std::sort(tmp.begin(), tmp.end());
+    if(std::distance(begin, end) == 0)
+        return (Realtype) 0.0;
+    else
+        return (Realtype) tmp[(int) (tmp.size() / 2)];
 }
 
 template<class K, class V, int N>

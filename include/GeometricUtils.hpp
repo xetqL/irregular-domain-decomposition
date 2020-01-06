@@ -108,6 +108,7 @@ inline double lb_getTetraederVolumeIndexed(int c1, int c2, int c3, int c4, const
             dir1_1 * (dir3_2 * dir2_0 - dir3_0 * dir2_2) +
             dir1_2 * (dir3_0 * dir2_1 - dir3_1 * dir2_0));
 }
+
 inline bool in_tetrahedron(const Tetrahedron_3& tet, const Point_3& p){
     auto side = tet.bounded_side(p);
     return side == CGAL::ON_BOUNDED_SIDE || side == CGAL::ON_BOUNDARY;

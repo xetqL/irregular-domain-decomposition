@@ -30,6 +30,17 @@ inline short get_type_size(MPI_Datatype type) {
     return -1;
 }
 
+template<class T>
+void gather_elements_on(T* send, int size, MPI_Datatype type, T* recv, int destrank, MPI_Comm comm){
+    get_MPI_worldsize(worldsize);
+    get_MPI_rank(my_rank);
+    std::vector<int> counts(worldsize, 0), displs(worldsize, 0);
+    MPI_Gather(&size, 1, MPI_INT, counts.data(), 1, MPI_INT, destrank, comm);
+    for(int cpu = 0; cpu < worldsize; cpu++)
+        displs[cpu] = cpu == 0 ? 0 : displs[cpu - 1] + counts[cpu - 1];
+    MPI_Gatherv(send, size, type, recv, counts.data(), displs.data(), type, destrank, comm);
+}
+
 struct CommunicationDatatype {
     MPI_Datatype element_datatype;
     MPI_Datatype minimal_datatype;
@@ -112,11 +123,14 @@ public:
         if (world_to_comm.find(world_rank) == world_to_comm.end()) {
             return;
         }
+
+        short size = get_type_size(sendtype);
+        int i = 0;
+
         if (comm_to_world.size() == 1) {
+            std::copy((char*) sendbuffer, (char*)sendbuffer + sendcount * size, ((char*) recvbuffer + i*recvcount*size));
             return;
         }
-        int i = 0;
-        short size = get_type_size(sendtype);
 
         int dim = (int)(std::log2(comm_to_world.size()));
         if(std::pow(2, dim) == comm_to_world.size())
@@ -136,6 +150,7 @@ public:
                 i++;
             }
     }
+
 
     // Peer-to-peer communications are just wrapper around MPI directives
     int Send(const void *buf, int count, MPI_Datatype datatype, int dest, int tag) const {

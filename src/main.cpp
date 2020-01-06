@@ -200,7 +200,7 @@ int main(int argc, char** argv) {
 
     std::vector<Cell> my_cells; my_cells.reserve(cell_per_process);
 
-    my_cells = generate_lattice_single_type(msx, msy, msz, x_proc_idx, y_proc_idx, z_proc_idx, cell_in_my_cols, cell_in_my_rows, cell_in_my_depth, Cell::WATER_TYPE, 1.0, 0.0);
+    my_cells = generate_lattice_single_type(msx, msy, msz, x_proc_idx, y_proc_idx, z_proc_idx, cell_in_my_cols, cell_in_my_rows, cell_in_my_depth, Cell::WATER_TYPE, 0.00001, 0.0);
 
     auto stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
 
@@ -212,48 +212,66 @@ int main(int argc, char** argv) {
     auto all_loads = get_neighbors_load(stats.my_load, MPI_COMM_WORLD); //global load balancing with MPI_COMM_WORLD
     auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / world_size;
 
-    LinearHashMap<int, std::vector<double>, 8> com_lb_time;
-    std::transform(part.vertices_id.begin(), part.vertices_id.end(), com_lb_time.begin(),
-                   [](auto id){return std::make_pair(id, std::vector<double>());});
+    std::array<std::vector<double>, 8>  com_lb_time; std::fill(com_lb_time.begin(), com_lb_time.end(), std::vector<double>());
+    std::array<double, 8>  com_degradation; std::fill(com_degradation.begin(), com_degradation.end(), 0.0);
+    std::array<int, 8>  com_ncall; std::fill(com_ncall.begin(), com_ncall.end(), 0);
+    std::array<int, 8>  com_pcall; std::fill(com_pcall.begin(), com_pcall.end(), 0);
 
-    std::array<SlidingWindow<double>, 8> arr_window = {
+    std::array<SlidingWindow<double>, 8> com_max_iteration_time_window = {
             SlidingWindow<double>(100), SlidingWindow<double>(100),
             SlidingWindow<double>(100), SlidingWindow<double>(100),
             SlidingWindow<double>(100), SlidingWindow<double>(100),
             SlidingWindow<double>(100), SlidingWindow<double>(100)
     };
 
-    LinearHashMap<int, int, 8> com_ncall;
-    std::transform(part.vertices_id.begin(), part.vertices_id.end(), com_ncall.begin(),
-                   [](auto id){return std::make_pair(id, 0);});
-    LinearHashMap<int, int, 8> com_pcall;
-    std::transform(part.vertices_id.begin(), part.vertices_id.end(), com_pcall.begin(),
-                   [](auto id){return std::make_pair(id, 0);});
+    std::array<SlidingWindow<double>, 8> com_avg_iteration_time_window = {
+            SlidingWindow<double>(100), SlidingWindow<double>(100),
+            SlidingWindow<double>(100), SlidingWindow<double>(100),
+            SlidingWindow<double>(100), SlidingWindow<double>(100),
+            SlidingWindow<double>(100), SlidingWindow<double>(100)
+    };
+
+    std::vector<double> imbalance_over_time, virtual_times(MAX_ITER, 0.0), cum_vtime(MAX_ITER, 0.0);
+
     bool lb_decision = false;
     //std::for_each(my_cells.cbegin(), my_cells.cend(), [&](auto v){std::cout << v << std::endl;});
     part.move_data<lb::GridPointTransformer, Cell>(my_cells, datatype_wrapper.element_datatype);
-    stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
-    if(!my_rank){
-        print_load_statitics(stats);
-    }
 
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    std::vector<int> com_tau;
+    int lb_call = 0;
     for(int j = 0; j < MAX_ITER; ++j) {
         int com = lb::translate_iteration_to_vertex_group(j, part.coord);
-        int &pcall = (*search_in_linear_hashmap<int, int, 8>(com_pcall, com)).second,
-            &ncall = (*search_in_linear_hashmap<int, int, 8>(com_ncall, com)).second;
-        auto vid = part.vertices_id[com];
-        const auto& communicator = part.vertex_neighborhood[vid];
-        std::vector<int> comm_workloads(communicator.comm_size, 0);
-        int workload = my_cells.size();
-        communicator.Allgather(&workload, 1, MPI_INT, comm_workloads.data(), 1, MPI_INT, vid);
-        SlidingWindow<double>& window = arr_window[com];
-        window.add(*std::max_element(comm_workloads.begin(), comm_workloads.end()));
-        lb_decision = (pcall + ncall) >= j;
-        std::cout << j << " " << rank << " " << vid << " -> " << lb_decision << "; "<< (pcall+ncall) << " >= " << j << std::endl;
-        if(lb_decision) {
+        int vid = part.vertices_id[com];
+        int &pcall = com_pcall[com],
+            &ncall = com_ncall[com];
+        const Communicator& communicator = part.vertex_neighborhood[vid];
+        double workload = 0,
+               virtual_time = 0,
+               &degradation_since_last_lb = com_degradation[com];
+
+        /* Compute_workload */
+        std::for_each(my_cells.cbegin(), my_cells.cend(), [&workload](Cell c){workload += c.weight;});
+
+        /* Compute maximum workload among neighborhood */
+        for(int com_id = 0; com_id < 8; com_id++) {
+            auto vid = part.vertices_id[com];
+            const auto& communicator = part.vertex_neighborhood[vid];
+            std::vector<double> comm_workloads(communicator.comm_size, 0);
+
+            communicator.Allgather(&workload, 1, MPI_DOUBLE, comm_workloads.data(), 1, MPI_DOUBLE, vid);
+            SlidingWindow<double>& max_time_window = com_max_iteration_time_window[com_id];
+            max_time_window.add(*std::max_element(comm_workloads.begin(), comm_workloads.end()));
+            SlidingWindow<double>& avg_time_window = com_avg_iteration_time_window[com_id];
+            avg_time_window.add(mean<double>(comm_workloads.begin(), comm_workloads.end()));
+        }
+
+        virtual_time = workload;
+
+        SlidingWindow<double>& max_iteration_time_window = com_max_iteration_time_window[com];
+        SlidingWindow<double>& avg_iteration_time_window = com_avg_iteration_time_window[com];
+
+        lb_decision = (pcall + ncall) <= j && j > 10;
+        //std::cout << j << " " << rank << " " << vid << " -> " << lb_decision << "; "<< (pcall+ncall) << " >= " << j << std::endl;
+        if(j > 0){//lb_decision) {
             auto start_time = MPI_Wtime();
             auto data = part.move_selected_vertices<lb::GridPointTransformer, lb::GridElementComputer, Cell>(
                     j,                                 // the groups that moves
@@ -261,36 +279,101 @@ int main(int argc, char** argv) {
                     datatype_wrapper.element_datatype, // the datatype associated with the data
                     avg_load,                          // the average load
                     mu);                               // the movement factor
-            auto lb_time = MPI_Wtime() - start_time;
+            double lb_time = MPI_Wtime() - start_time;
+
+            {
+                std::vector<double> lbtimes(communicator.comm_size);
+                communicator.Allgather(&lb_time, 1, MPI_DOUBLE, lbtimes.data(), 1, MPI_DOUBLE, 122334);
+                lb_time = *std::max_element(lbtimes.cbegin(), lbtimes.cend());
+            }
+
             //(*search_in_linear_hashmap<int, std::vector<double>, 8>(com_lb_time, com)).second.push_back(lb_time);
-            auto C = (*search_in_linear_hashmap<int, std::vector<double>, 8>(com_lb_time, com)).second;
+            std::vector<double> &C = com_lb_time[com];
             C.push_back(lb_time);
-            std::for_each(C.cbegin(), C.cend(), [&](auto v){std::cout << "->"<< v << std::endl;});
-            //std::for_each(C2.cbegin(), C2.cend(), [&](auto v){std::cout << v << std::endl;});
+            // std::for_each( C.cbegin(), C.cend(),  [&](auto v) {std::cout << "->"<< v << std::endl;});
+            // std::for_each(C2.cbegin(), C2.cend(), [&](auto v) {std::cout << v << std::endl;});
             auto avg_lb_cost = std::accumulate(C.begin(), C.end(), 0.0) / C.size();
-            std::cout << avg_lb_cost << std::endl;
-            int tau = (int) std::sqrt(2*avg_lb_cost/get_slope<double>(window.data_container));
-            if(tau < 0) tau = MAX_ITER+1;
+            //std::cout << "LB Cost: " << avg_lb_cost << std::endl;
+            double slope = max_iteration_time_window.data_container.back() - max_iteration_time_window.data_container.front(); //get_slope<double>(iteration_time_window.data_container)
+            int tau = (int) std::sqrt(2.0 * avg_lb_cost / slope);
+            //tau = std::min(100, tau);
+            if(tau < 0) tau = 40;
+            if(tau == 0) tau = 1;
 
-            com_tau.resize(communicator.comm_size);
+            {
+                std::vector<int> com_tau(communicator.comm_size, 0);
+                communicator.Allgather(&tau, 1, MPI_INT, com_tau.data(), 1, MPI_INT, vid);
+                ncall = *std::max_element(com_tau.cbegin(), com_tau.cend());
+            }
 
-            communicator.Allgather(&tau, 1, MPI_INT, com_tau.data(), 1, MPI_INT, vid);
-
-            std::cout << j << " " << rank << " " << vid << " tau -> " << *std::max_element(com_tau.cbegin(), com_tau.cend()) << std::endl;
-
-            ncall = *std::max_element(com_tau.cbegin(), com_tau.cend());
-
-            std::cout << "slope: " << (int) get_slope<double>(window.data_container) << std::endl;
-            std::cout << "tau: " << (*search_in_linear_hashmap<int, int, 8>(com_ncall, com)).second << std::endl;
-            window.data_container.clear();
-            pcall = j+1;
+            max_iteration_time_window.data_container.clear();
+            avg_iteration_time_window.data_container.clear();
+            degradation_since_last_lb = 0.0;
+            pcall = j+8;
+            lb_call++;
+            virtual_time += lb_time;
         }
-        stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
+
+        //
+        degradation_since_last_lb +=
+                median<double>(max_iteration_time_window.end()-std::min(3, (int) max_iteration_time_window.size()), max_iteration_time_window.end())-
+                median<double>(avg_iteration_time_window.end()-std::min(3, (int) max_iteration_time_window.size()), avg_iteration_time_window.end());
+
+        //double tmp_vtime = virtual_time;
+        //MPI_Reduce(&tmp_vtime, &virtual_time, 1, MPI_DOUBLE,  MPI_MAX, 0, MPI_COMM_WORLD);
+        virtual_times[j] = virtual_time;
+
+        //stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
         if(!my_rank) {
-            std::cout << "Iteration " << j << std::endl;
-            print_load_statitics(stats);
+            //imbalance_over_time.push_back(stats.global);
+            //std::cout << "Iteration " << j << std::endl;
+            //std::for_each(iteration_time_window.data_container.begin(), iteration_time_window.data_container.end(), [](auto& c){std::cout << "!!" << c << std::endl;});
+            //print_load_statitics(stats);
+            //std::cout << "Load of 0: " << stats.my_load << std::endl;
+            std::for_each(my_cells.begin(), my_cells.end(), [&](auto& c){c.increase_weight(0.001 / my_cells.size());});
+            cum_vtime[j] = j == 0 ? virtual_time : cum_vtime[j-1] + virtual_time;
         }
+
+
+
     }
+
+    std::vector<int> lb_calls(world_size);
+    double total_time = std::accumulate(virtual_times.cbegin(), virtual_times.cend(), 0.0);
+    double max_total_time;
+    MPI_Reduce(&total_time, &max_total_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+    gather_elements_on(&lb_call, 1, MPI_INT, lb_calls.data(), 0, MPI_COMM_WORLD);
+
+    if(!my_rank) {
+        std::ofstream fimbalance;
+        fimbalance.open("imbalance.txt", std::ofstream::out);
+        for(auto imbalance : imbalance_over_time){
+            fimbalance << imbalance << std::endl;
+        }
+        fimbalance.close();
+        std::ofstream flb_calls;
+        flb_calls.open("lb_calls.txt", std::ofstream::out);
+        for(auto lb_call : lb_calls){
+            flb_calls << lb_call << std::endl;
+        }
+        flb_calls.close();
+        std::ofstream fvtimes;
+        fvtimes.open("vtimes.txt", std::ofstream::out);
+        for(auto t : virtual_times){
+            fvtimes << t << std::endl;
+        }
+        fvtimes.close();
+        std::ofstream fcumvtimes;
+        fcumvtimes.open("vcumtimes.txt", std::ofstream::out);
+        for(auto t : cum_vtime){
+            fcumvtimes << t << std::endl;
+        }
+        fcumvtimes.close();
+        std::cout << "------------------- " << std::endl;
+        std::cout << "Total time: " << max_total_time << std::endl;
+        std::cout << "------------------- " << std::endl;
+    }
+
 
     MPI_Finalize();
 
