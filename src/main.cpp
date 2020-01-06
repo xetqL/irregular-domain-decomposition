@@ -370,7 +370,7 @@ int main(int argc, char** argv) {
         }
         fcumvtimes.close();
         std::cout << "------------------- " << std::endl;
-        std::cout << "Total time: " << max_total_time << std::endl;
+        std::cout << "Total time: "         << max_total_time << std::endl;
         std::cout << "------------------- " << std::endl;
     }
 
