@@ -195,6 +195,9 @@ void scatterplot_3d_output(int rank, std::string filename, const std::vector<A> 
     for (const A &el : elements) {
         lb::Point_3 p = cpf.transform(el);
         f << rank << " " << p.x() << " " << p.y() << " " << p.z() << std::endl;
+#ifdef DEBUG
+        std::cout << rank << " " << p.x() << " " << p.y() << " " << p.z() << std::endl;
+#endif
     }
     f.close();
 }

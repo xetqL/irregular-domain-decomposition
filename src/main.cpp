@@ -206,7 +206,6 @@ int main(int argc, char** argv) {
 
     if(!my_rank) print_load_statitics(stats);
 
-    auto prev_imbalance = stats.global;
     double mu = 1.0;
 
     auto all_loads = get_neighbors_load(stats.my_load, MPI_COMM_WORLD); //global load balancing with MPI_COMM_WORLD
@@ -234,12 +233,26 @@ int main(int argc, char** argv) {
     std::vector<double> imbalance_over_time, virtual_times(MAX_ITER, 0.0), cum_vtime(MAX_ITER, 0.0);
 
     bool lb_decision = false;
+    lb::GridPointTransformer transformer;
     //std::for_each(my_cells.cbegin(), my_cells.cend(), [&](auto v){std::cout << v << std::endl;});
     part.move_data<lb::GridPointTransformer, Cell>(my_cells, datatype_wrapper.element_datatype);
+    for(const Cell& c : my_cells){
+        if(!part.contains(transformer.transform(c))) throw std::runtime_error("gros fils de pute");
+    }
+    std::sort(my_cells.begin(), my_cells.end(), [](Cell a, Cell b) {return a.gid < b.gid;} );
+
+    lb::DiffusiveOptimizer<lb::GridPointTransformer, lb::GridElementComputer, Cell> opt;
+    for(int i = 0; i < world_size; ++i){
+        if(my_rank == i) {
+            io::scatterplot_3d_output<lb::GridPointTransformer>(i, "debug-domain-decomposition-" + std::to_string(0) + ".dat", my_cells);
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+    }
 
     int lb_call = 0;
-    for(int j = 0; j < MAX_ITER; ++j) {
+    for(int j = 1; j < MAX_ITER; ++j) {
         int com = lb::translate_iteration_to_vertex_group(j, part.coord);
+        std::vector<double> &C = com_lb_time[com];
         int vid = part.vertices_id[com];
         int &pcall = com_pcall[com],
             &ncall = com_ncall[com];
@@ -256,7 +269,6 @@ int main(int argc, char** argv) {
             auto vid = part.vertices_id[com];
             const auto& communicator = part.vertex_neighborhood[vid];
             std::vector<double> comm_workloads(communicator.comm_size, 0);
-
             communicator.Allgather(&workload, 1, MPI_DOUBLE, comm_workloads.data(), 1, MPI_DOUBLE, vid);
             SlidingWindow<double>& max_time_window = com_max_iteration_time_window[com_id];
             max_time_window.add(*std::max_element(comm_workloads.begin(), comm_workloads.end()));
@@ -268,44 +280,32 @@ int main(int argc, char** argv) {
 
         SlidingWindow<double>& max_iteration_time_window = com_max_iteration_time_window[com];
         SlidingWindow<double>& avg_iteration_time_window = com_avg_iteration_time_window[com];
-
-        lb_decision = (pcall + ncall) <= j && j > 10;
+        auto avg_lb_cost = std::accumulate(C.begin(), C.end(), 0.0) / C.size();
+        lb_decision = ((pcall + ncall) <= j || degradation_since_last_lb >= avg_lb_cost) && j > 10 ;
         //std::cout << j << " " << rank << " " << vid << " -> " << lb_decision << "; "<< (pcall+ncall) << " >= " << j << std::endl;
-        if(j > 0){//lb_decision) {
-            auto start_time = MPI_Wtime();
-            auto data = part.move_selected_vertices<lb::GridPointTransformer, lb::GridElementComputer, Cell>(
-                    j,                                 // the groups that moves
-                    my_cells,                          // the data to LB
-                    datatype_wrapper.element_datatype, // the datatype associated with the data
-                    avg_load,                          // the average load
-                    mu);                               // the movement factor
-            double lb_time = MPI_Wtime() - start_time;
+        std::cout << my_rank << " >> "<< j << "; com = "<< com << " " << (lb_decision ? "True" : "False") << std::endl;
 
+        if(true){//) {
+
+            auto start_time = MPI_Wtime();
+            opt.optimize_neighborhood(com, part, my_cells, datatype_wrapper.element_datatype, mu);
+            double lb_time = MPI_Wtime() - start_time;
             {
                 std::vector<double> lbtimes(communicator.comm_size);
                 communicator.Allgather(&lb_time, 1, MPI_DOUBLE, lbtimes.data(), 1, MPI_DOUBLE, 122334);
                 lb_time = *std::max_element(lbtimes.cbegin(), lbtimes.cend());
             }
-
-            //(*search_in_linear_hashmap<int, std::vector<double>, 8>(com_lb_time, com)).second.push_back(lb_time);
-            std::vector<double> &C = com_lb_time[com];
             C.push_back(lb_time);
-            // std::for_each( C.cbegin(), C.cend(),  [&](auto v) {std::cout << "->"<< v << std::endl;});
-            // std::for_each(C2.cbegin(), C2.cend(), [&](auto v) {std::cout << v << std::endl;});
             auto avg_lb_cost = std::accumulate(C.begin(), C.end(), 0.0) / C.size();
-            //std::cout << "LB Cost: " << avg_lb_cost << std::endl;
             double slope = max_iteration_time_window.data_container.back() - max_iteration_time_window.data_container.front(); //get_slope<double>(iteration_time_window.data_container)
             int tau = (int) std::sqrt(2.0 * avg_lb_cost / slope);
-            //tau = std::min(100, tau);
-            if(tau < 0) tau = 40;
+            if(tau < 0)  tau = 40;
             if(tau == 0) tau = 1;
-
             {
                 std::vector<int> com_tau(communicator.comm_size, 0);
                 communicator.Allgather(&tau, 1, MPI_INT, com_tau.data(), 1, MPI_INT, vid);
                 ncall = *std::max_element(com_tau.cbegin(), com_tau.cend());
             }
-
             max_iteration_time_window.data_container.clear();
             avg_iteration_time_window.data_container.clear();
             degradation_since_last_lb = 0.0;
@@ -314,28 +314,22 @@ int main(int argc, char** argv) {
             virtual_time += lb_time;
         }
 
-        //
         degradation_since_last_lb +=
-                median<double>(max_iteration_time_window.end()-std::min(3, (int) max_iteration_time_window.size()), max_iteration_time_window.end())-
+                median<double>(max_iteration_time_window.end()-std::min(3, (int) max_iteration_time_window.size()), max_iteration_time_window.end()) -
                 median<double>(avg_iteration_time_window.end()-std::min(3, (int) max_iteration_time_window.size()), avg_iteration_time_window.end());
 
-        //double tmp_vtime = virtual_time;
-        //MPI_Reduce(&tmp_vtime, &virtual_time, 1, MPI_DOUBLE,  MPI_MAX, 0, MPI_COMM_WORLD);
         virtual_times[j] = virtual_time;
 
-        //stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
         if(!my_rank) {
-            //imbalance_over_time.push_back(stats.global);
-            //std::cout << "Iteration " << j << std::endl;
-            //std::for_each(iteration_time_window.data_container.begin(), iteration_time_window.data_container.end(), [](auto& c){std::cout << "!!" << c << std::endl;});
-            //print_load_statitics(stats);
-            //std::cout << "Load of 0: " << stats.my_load << std::endl;
+            /* increase workload */
             std::for_each(my_cells.begin(), my_cells.end(), [&](auto& c){c.increase_weight(0.001 / my_cells.size());});
             cum_vtime[j] = j == 0 ? virtual_time : cum_vtime[j-1] + virtual_time;
         }
-
-
-
+        for(int i = 0; i < world_size; ++i){
+            if(my_rank == i)
+                io::scatterplot_3d_output<lb::GridPointTransformer>(i, "debug-domain-decomposition-" + std::to_string(j) + ".dat", my_cells);
+            MPI_Barrier(MPI_COMM_WORLD);
+        }
     }
 
     std::vector<int> lb_calls(world_size);
@@ -374,6 +368,7 @@ int main(int argc, char** argv) {
         std::cout << "------------------- " << std::endl;
     }
 
+    lb::print_load_statitics(part.get_load_statistics<lb::GridElementComputer>(my_cells));
 
     MPI_Finalize();
 

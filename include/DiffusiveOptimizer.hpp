@@ -27,153 +27,38 @@ template<class GridPointTransformer, class GridElementComputer, class Cell>
 class DiffusiveOptimizer {
 
 public:
-    void optimize(Partition& part, std::vector<Cell>& my_cells, MPI_Datatype datatype, double mu, int overloading = 0) {
+    void optimize_neighborhood(int com, Partition& part, std::vector<Cell>& my_cells, MPI_Datatype datatype, double init_mu) {
         get_MPI_rank(my_rank);
         get_MPI_worldsize(worldsize);
-
+        auto vid = part.vertices_id[com];
+#ifdef DEBUG
+        std::cout << my_rank << " enters " << __func__ << " with vid "<< vid << " with size " << part.vertex_neighborhood[vid].comm_size << std::endl;
+#endif
         GridElementComputer lc;
-        /*
-        std::vector<double> loads(worldsize), all_mu(8, mu);
-        double my_load = lc.compute_load(my_cells);
-        double max_load;
 
-        MPI_Allreduce(&my_load, &max_load, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-        double avg_load = max_load / (double) worldsize;
-        auto neighbors_load  = get_neighbors_info(my_load,  MPI_DOUBLE, part.neighbor_list, part.vertex_neighborhood);
-        std::vector<double> imbalances(8);
-        std::transform(neighbors_load.begin(), neighbors_load.end(), imbalances.begin(),
-                       [avg_load](auto vals){ return 1000.0; });//(*std::max_element(vals.second.cbegin(), vals.second.cend()) / avg_load) - 1.0; });
-        LinearHashMap<int, double, 8> vertices_mu;
-        LinearHashMap<int, double, 8> previous_imbalance;
-        std::zip(part.vertices_id.begin(), part.vertices_id.end(), imbalances.begin(), imbalances.end(), previous_imbalance.begin());
-        auto remaining_it = (int) std::cbrt(worldsize)-2;
-
-        LinearHashMap <int, bool, 8> vertices_status; //active = true, inactive = false
-        std::transform(part.vertices_id.begin(), part.vertices_id.end(), vertices_status.begin(),
-                       [](auto id){return std::make_pair(id, true);});
-
-        auto neighbors_status = get_neighbors_info(overloading, MPI_INT, part.neighbor_list, part.vertex_neighborhood);
-        LinearHashMap<int,  bool, 8> strategy;
-        std::transform(neighbors_status.cbegin(), neighbors_status.cend(), strategy.begin(),
-           [](std::pair<int, std::vector<int>> statuses) {
-               return std::make_pair(statuses.first, std::any_of(statuses.second.cbegin(), statuses.second.cend(), [](int status){return status;}));
-           });
-
-        LinearHashMap <int, int, 8> vertices_remaining_trials;
-        std::transform(part.vertices_id.begin(), part.vertices_id.end(), vertices_remaining_trials.begin(),
-                       [](auto id){return std::make_pair(id, 10);});
-        while((remaining_it) > 0 || std::accumulate(vertices_remaining_trials.begin(), vertices_remaining_trials.end(), 0, [](int sum, auto rm) {return sum + rm.second;}) > 0) {
-            //auto n_list = filter_active_neighbors(part.vertices_id, vertices_remaining_trials, part.vertex_neighborhood);
-#ifdef DEBUG
-            std::cout << my_rank << " has "<< remaining_it <<" remaining it and "
-            << std::accumulate(vertices_remaining_trials.begin(), vertices_remaining_trials.end(), 0, [](int sum, auto rm) {return sum + rm.second;}) << " active vertices" <<  std::endl;
-#endif
-            part.move_vertices<GridPointTransformer, GridElementComputer, Cell>(my_cells, datatype, avg_load, 1.0, vertices_remaining_trials);
-            my_load = lc.compute_load(my_cells);
-
-            neighbors_load  = get_neighbors_info(my_load,  MPI_DOUBLE, n_list, part.vertex_neighborhood);
-
-            for(int vid : part.vertices_id) {
-                //const bool vertex_status   = (*search_in_linear_hashmap<int, bool,   8>(strategy, vid)).second; //ulba or not
-                int& vertex_rem_trial = (*search_in_linear_hashmap<int, int,8>(vertices_remaining_trials, vid)).second; // stop or not
-                double& prev_imbl = (*search_in_linear_hashmap<int, double, 8>(previous_imbalance, vid)).second;
-
-                if(vertex_rem_trial > 0) { // if continue
-                    //compute imbalance
-                    auto current_neighborhood_load = (*search_in_linear_hashmap<int, std::vector<double>, 8>(neighbors_load, vid)).second;
-                    double imbalance  = (*std::max_element(current_neighborhood_load.cbegin(), current_neighborhood_load.cend()) / avg_load) - 1.0;
-                    //new imbalance is good
-                    if(imbalance < 0.2) {
-                        vertex_rem_trial--;
-                    } else {
-                        vertex_rem_trial = 10;
-                        prev_imbl = imbalance;
-                    }
-                }
-
-#ifdef DEBUG
-                std::cout << my_rank << " with vid "<< vid << " has "<< prev_imbl << " rt: " << vertex_rem_trial << std::endl;
-#endif
-            }
-            remaining_it--;
-            //MPI_Barrier(MPI_COMM_WORLD);
-        }*/
-
-#ifdef DEBUG
-        std::cout << my_rank << " has left"<<std::endl;
-#endif
-
-        auto stats = part.get_load_statistics<GridElementComputer>(my_cells);
+        auto stats = part.get_neighborhood_load_statistics<GridElementComputer>(com, my_cells);
         auto my_load = stats.my_load;
-        if(!my_rank) print_load_statitics(stats);
-        /*for(int i = 0; i < world_size; ++i){
-            if(my_rank == i) io::scatterplot_3d_output<GridPointTransformer>(i, "debug-domain-decomposition-"+std::to_string(0)+".dat", my_cells);
-            MPI_Barrier(MPI_COMM_WORLD);
-        }*/
         auto prev_imbalance = stats.global;
+        auto avg_load = stats.avg_load;
 
-        auto all_loads = get_neighbors_load(stats.my_load, MPI_COMM_WORLD); //global load balancing with MPI_COMM_WORLD
-        auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / worldsize;
+        double delta_load = 0;
+        unsigned int remaining_trials = 3;
+        double mu = init_mu;
+        while(remaining_trials) {
+            auto data = part.move_selected_vertices<GridPointTransformer, GridElementComputer, Cell>
+                    (com, my_cells, datatype, avg_load, mu, &delta_load);
+            my_load += delta_load;
+            auto current_stats = part.get_neighborhood_load_statistics(com, my_load, my_cells.size());
 
-        //DiffusiveOptimizer<GridPointTransformer, GridElementComputer, Cell> diff_opt;
-
-        //diff_opt.optimize(part, my_cells, datatype_wrapper.element_datatype, 1.0);
-
-        stats = part.get_load_statistics<GridElementComputer>(my_cells);
-        if(!my_rank)
-            print_load_statitics(stats);
-        std::vector<double> all_mu(8, mu);
-        LinearHashMap<int, double, 8> vertices_mu;
-        std::zip(part.vertices_id.begin(), part.vertices_id.end(), all_mu.begin(), all_mu.end(), vertices_mu.begin());
-        LinearHashMap <int, int, 8> vertices_remaining_trials;
-        std::transform(part.vertices_id.begin(), part.vertices_id.end(), vertices_remaining_trials.begin(),
-                       [](auto id){return std::make_pair(id, 20);});
-        for(int j = 0; j < 50; ++j) {
-            auto data = part.move_vertices<GridPointTransformer, GridElementComputer, Cell>(my_cells, datatype, avg_load, mu, vertices_remaining_trials);
-            if(prev_imbalance <= stats.global) mu *= 0.9;
-            prev_imbalance = stats.global;
-            stats = part.get_load_statistics<GridElementComputer>(my_cells);
-            if(!my_rank)
-                print_load_statitics(stats);
-        }
-        /*
-        int remaining_it = 10;
-        while((remaining_it) > 0 || std::accumulate(vertices_remaining_trials.begin(), vertices_remaining_trials.end(), 0, [](int sum, auto rm) {return sum + rm.second;}) > 0) {
-
-            //auto n_list = filter_active_neighbors(part.vertices_id, vertices_remaining_trials, part.vertex_neighborhood);
-            part.move_vertices<GridPointTransformer, GridElementComputer, Cell>(my_cells, datatype, avg_load, 1.0, vertices_remaining_trials);
-
-            my_load = lc.compute_load(my_cells);
-            auto n_list = filter_active_neighbors(part.vertices_id, vertices_remaining_trials, part.vertex_neighborhood);
-            auto neighbors_load  = get_neighbors_info(my_load, MPI_DOUBLE, n_list, part.vertex_neighborhood);
-            for(int vid : part.vertices_id) {
-                //const bool vertex_status   = (*search_in_linear_hashmap<int, bool,   8>(strategy, vid)).second; //ulba or not
-                int& vertex_rem_trial = (*search_in_linear_hashmap<int, int,8>(vertices_remaining_trials, vid)).second; // stop or not
-                //double& prev_imbl = (*search_in_linear_hashmap<int, double, 8>(previous_imbalance, vid)).second;
-
-                if(vertex_rem_trial > 0) { // if continue
-                    //compute imbalance
-                    auto current_neighborhood_load = (*search_in_linear_hashmap<int, std::vector<double>, 8>(neighbors_load, vid)).second;
-                    double imbalance  = (*std::max_element(current_neighborhood_load.cbegin(), current_neighborhood_load.cend()) / avg_load) - 1.0;
-                    //new imbalance is good
-                    if(imbalance < 0.2) {
-                        vertex_rem_trial--;
-                    } else {
-                        vertex_rem_trial = 20;
-                        //prev_imbl = imbalance;
-                    }
-                }
+            if(prev_imbalance <= current_stats.global) {
+                remaining_trials--;
+                mu /= 2.0;
+            } else {
+                remaining_trials = 3;
+                prev_imbalance = current_stats.global;
             }
-            remaining_it--;
-            stats = part.get_load_statistics<GridElementComputer>(my_cells);
-            if(!my_rank)
-                print_load_statitics(stats);
+
         }
-        while(true){
-            stats = part.get_load_statistics<GridElementComputer>(my_cells);
-            if(!my_rank)
-                print_load_statitics(stats);
-        }*/
     }
 };
 
