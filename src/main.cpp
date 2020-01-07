@@ -14,8 +14,11 @@
 #include <Utils.hpp>
 #include <SimulationParams.hpp>
 #include <CLIParser.hpp>
-
+#include "generate.hpp"
 int my_rank, world_size;
+constexpr int DIMENSION = 3;
+using Particle = elements::Element<DIMENSION>;
+using Cell     = mesh::Cell<Particle>;
 
 inline int bitselect(int condition, int truereturnvalue, int falsereturnvalue) {
     return (truereturnvalue & -condition) | (falsereturnvalue & ~(-condition)); //a when TRUE and b when FintLSE
@@ -24,7 +27,7 @@ inline int bitselect(int condition, int truereturnvalue, int falsereturnvalue) {
 std::vector<Cell> generate_lattice_single_type( int msx, int msy, int msz,
                                                 int x_proc_idx, int y_proc_idx, int z_proc_idx,
                                                 int cell_in_my_cols, int cell_in_my_rows, int cell_in_my_depth,
-                                                int type, float weight, float erosion_probability) {
+                                                mesh::TCellType type, float weight, float erosion_probability) {
 
     int cell_per_process = cell_in_my_cols * cell_in_my_rows;
     std::vector<Cell> my_cells; my_cells.reserve(cell_per_process);
@@ -37,7 +40,7 @@ std::vector<Cell> generate_lattice_single_type( int msx, int msy, int msz,
         for(int y = 0; y < cell_in_my_cols; ++y) {
             for(int x = 0; x < cell_in_my_rows; ++x) {
                 int gid = (x_shift + x) + (y_shift + y) * msx + (z_shift + z) * msx * msy;
-                my_cells.emplace_back(gid, type, weight, erosion_probability);
+                my_cells.emplace_back(gid, type);
             }
         }
     }
@@ -49,12 +52,13 @@ namespace lb {
 
 struct GridElementComputer {
     double compute_load(const std::vector<Cell>& elements){
-        return std::accumulate(elements.cbegin(), elements.cend(), 0.0, [](double l, Cell e){return l + e.weight;});
+        return std::accumulate(elements.cbegin(), elements.cend(), 0.0, [](double l, Cell e){return l + 1.0;});
     }
+
     std::vector<double> get_weights(const std::vector<Cell>& elements) {
         std::vector<double> weights;
         std::transform(elements.cbegin(), elements.cend(), std::back_inserter(weights), [](Cell e) {
-            return e.weight;
+            return 1.0;
         });
         return weights;
     }
@@ -99,9 +103,7 @@ void generate_lattice_rocks(const int rocks_per_stripe, int msx, int msy,
         for(auto& rock : rocks_data){
             std::tie(cx, cy, cr) = rock;
             if(std::sqrt( std::pow(cx-pos.first, 2) + std::pow(cy - pos.second, 2) ) < cr) {
-                cell.type  = Cell::ROCK_TYPE;
-                cell.weight= 0.0;
-                cell.erosion_probability = erosion_probability;
+                cell.type  = mesh::TCellType::REAL_CELL;
                 break;
             }
         }
@@ -124,6 +126,9 @@ std::pair<int, int> cell_to_global_position(int msx, int msy, long long position
 }
 
 int main(int argc, char** argv) {
+
+
+
     int rank;
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
@@ -141,17 +146,16 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
-    const int DOMAIN_SIZE_X = 10;
-    const int DOMAIN_SIZE_Y = 10;
-    const int DOMAIN_SIZE_Z = 10;
+    const int DOMAIN_SIZE_X = params.simsize_x;
+    const int DOMAIN_SIZE_Y = params.simsize_y;
+    const int DOMAIN_SIZE_Z = params.simsize_z;
 
     lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z);
 
-    //d.grid_cell_size = std::atof(argv[1]);
-    //int MAX_ITER     = std::atoi(argv[2]);
     int procs_x = params.xprocs,
-            procs_y = params.yprocs,
-            procs_z = params.zprocs;
+        procs_y = params.yprocs,
+        procs_z = params.zprocs;
+
     const unsigned int xprocs = params.xprocs,
                        yprocs = params.yprocs,
                        zprocs = params.zprocs,
@@ -174,7 +178,9 @@ int main(int argc, char** argv) {
     int& msx = Cell::get_msx();
     int& msy = Cell::get_msy();
     int& msz = Cell::get_msz();
+
     Cell::get_cell_size() = (double) DOMAIN_SIZE_X / (double) xcells;
+
     if(!rank) {
         std::cout << "Cell number (X,Y,Z) = (" << msx<<","<<msy<<","<<msz<<")"<< std::endl;
         std::cout << "Cell size = " << Cell::get_cell_size() << std::endl;
@@ -191,16 +197,39 @@ int main(int argc, char** argv) {
 
     std::normal_distribution<double> normal_distribution(1.0 + my_rank % 2, 0.2);
 
-    int nb_cells_x = (DOMAIN_SIZE_X / (double) procs_x / (double) d.grid_cell_size);
-    int nb_cells_y = (DOMAIN_SIZE_Y / (double) procs_y / (double) d.grid_cell_size);
-    int nb_cells_z = (DOMAIN_SIZE_Z / (double) procs_z / (double) d.grid_cell_size);
+    int nb_cells_x = (int) (DOMAIN_SIZE_X / (double) procs_x / d.grid_cell_size);
+    int nb_cells_y = (int) (DOMAIN_SIZE_Y / (double) procs_y / d.grid_cell_size);
+    int nb_cells_z = (int) (DOMAIN_SIZE_Z / (double) procs_z / d.grid_cell_size);
 
     int x_proc_idx, y_proc_idx, z_proc_idx;
     lb::linear_to_grid(my_rank, procs_x, procs_y, x_proc_idx, y_proc_idx, z_proc_idx);
 
     std::vector<Cell> my_cells; my_cells.reserve(cell_per_process);
 
-    my_cells = generate_lattice_single_type(msx, msy, msz, x_proc_idx, y_proc_idx, z_proc_idx, cell_in_my_cols, cell_in_my_rows, cell_in_my_depth, Cell::WATER_TYPE, 0.00001, 0.0);
+    my_cells = generate_lattice_single_type(msx, msy, msz, x_proc_idx, y_proc_idx, z_proc_idx, cell_in_my_cols, cell_in_my_rows, cell_in_my_depth, mesh::TCellType::REAL_CELL, 0.00001, 0.0);
+
+    {
+        std::vector<Particle> particles;
+        auto rejection_condition = std::make_shared<initial_condition::lennard_jones::RejectionCondition<DIMENSION>>(
+                &particles, params.sig_lj, 6.25 * params.sig_lj * params.sig_lj, params.T0, 0, 0, 0,
+                params.simsize_x, params.simsize_y, params.simsize_z
+        );
+        auto elements_generators = init_generator(rejection_condition, 0, &params);
+        int cfg_idx = 0;
+        while (!elements_generators.empty()) {
+            std::cout << "Starting generation of particles with configuration ("
+                      << cfg_idx<<"/"<<elements_generators.size()<<") ..." <<std::endl;
+            auto el_gen = elements_generators.front();
+            el_gen.first->generate_elements(&particles, el_gen.second, rejection_condition);
+            elements_generators.pop();
+            std::cout << el_gen.second <<"/"<< params.npart << " particles generated." << std::endl;
+            cfg_idx++;
+        }
+
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
     auto stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
 
@@ -234,20 +263,20 @@ int main(int argc, char** argv) {
 
     bool lb_decision = false;
     lb::GridPointTransformer transformer;
-    //std::for_each(my_cells.cbegin(), my_cells.cend(), [&](auto v){std::cout << v << std::endl;});
+
     part.move_data<lb::GridPointTransformer, Cell>(my_cells, datatype_wrapper.element_datatype);
-    for(const Cell& c : my_cells){
-        if(!part.contains(transformer.transform(c))) throw std::runtime_error("gros fils de pute");
-    }
+
     std::sort(my_cells.begin(), my_cells.end(), [](Cell a, Cell b) {return a.gid < b.gid;} );
 
     lb::DiffusiveOptimizer<lb::GridPointTransformer, lb::GridElementComputer, Cell> opt;
+#ifdef OUTPUT
     for(int i = 0; i < world_size; ++i){
         if(my_rank == i) {
             io::scatterplot_3d_output<lb::GridPointTransformer>(i, "debug-domain-decomposition-" + std::to_string(0) + ".dat", my_cells);
         }
         MPI_Barrier(MPI_COMM_WORLD);
     }
+#endif
 
     int lb_call = 0;
     for(int j = 1; j < MAX_ITER; ++j) {
@@ -260,9 +289,6 @@ int main(int argc, char** argv) {
         double workload = 0,
                virtual_time = 0,
                &degradation_since_last_lb = com_degradation[com];
-
-        /* Compute_workload */
-        std::for_each(my_cells.cbegin(), my_cells.cend(), [&workload](Cell c){workload += c.weight;});
 
         /* Compute maximum workload among neighborhood */
         for(int com_id = 0; com_id < 8; com_id++) {
@@ -281,22 +307,24 @@ int main(int argc, char** argv) {
         SlidingWindow<double>& max_iteration_time_window = com_max_iteration_time_window[com];
         SlidingWindow<double>& avg_iteration_time_window = com_avg_iteration_time_window[com];
         auto avg_lb_cost = std::accumulate(C.begin(), C.end(), 0.0) / C.size();
-        lb_decision = ((pcall + ncall) <= j || degradation_since_last_lb >= avg_lb_cost) && j > 10 ;
-        //std::cout << j << " " << rank << " " << vid << " -> " << lb_decision << "; "<< (pcall+ncall) << " >= " << j << std::endl;
+        lb_decision = degradation_since_last_lb >= avg_lb_cost;
         std::cout << my_rank << " >> "<< j << "; com = "<< com << " " << (lb_decision ? "True" : "False") << std::endl;
 
-        if(true){//) {
+        if(lb_decision) {
 
             auto start_time = MPI_Wtime();
             opt.optimize_neighborhood(com, part, my_cells, datatype_wrapper.element_datatype, mu);
-            double lb_time = MPI_Wtime() - start_time;
+            double lb_time  = MPI_Wtime() - start_time;
+
             {
                 std::vector<double> lbtimes(communicator.comm_size);
                 communicator.Allgather(&lb_time, 1, MPI_DOUBLE, lbtimes.data(), 1, MPI_DOUBLE, 122334);
                 lb_time = *std::max_element(lbtimes.cbegin(), lbtimes.cend());
             }
+
             C.push_back(lb_time);
             auto avg_lb_cost = std::accumulate(C.begin(), C.end(), 0.0) / C.size();
+            std::cout << avg_lb_cost << std::endl;
             double slope = max_iteration_time_window.data_container.back() - max_iteration_time_window.data_container.front(); //get_slope<double>(iteration_time_window.data_container)
             int tau = (int) std::sqrt(2.0 * avg_lb_cost / slope);
             if(tau < 0)  tau = 40;
@@ -322,14 +350,15 @@ int main(int argc, char** argv) {
 
         if(!my_rank) {
             /* increase workload */
-            std::for_each(my_cells.begin(), my_cells.end(), [&](auto& c){c.increase_weight(0.001 / my_cells.size());});
             cum_vtime[j] = j == 0 ? virtual_time : cum_vtime[j-1] + virtual_time;
         }
+#ifdef OUTPUTS
         for(int i = 0; i < world_size; ++i){
             if(my_rank == i)
                 io::scatterplot_3d_output<lb::GridPointTransformer>(i, "debug-domain-decomposition-" + std::to_string(j) + ".dat", my_cells);
             MPI_Barrier(MPI_COMM_WORLD);
         }
+#endif
     }
 
     std::vector<int> lb_calls(world_size);

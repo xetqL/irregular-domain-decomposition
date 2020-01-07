@@ -7,19 +7,20 @@
 
 #include <GeometricUtils.hpp>
 #include <Communicator.hpp>
+namespace mesh {
+    enum TCellType {REAL_CELL = 1, EMPTY_CELL=2, GHOST_CELL=3};
 
+template<class ContainedElement>
 struct Cell {
-    static const int WATER_TYPE = 1;
-    static const int ROCK_TYPE  = 0;
-    int gid, type; // type = -1:empty, 0:rock, 1:water
-    float weight, erosion_probability;
-    double average_load = 2000;
 
-    Cell() : gid(0), type(0), weight(1.0), erosion_probability(0) {};
-    Cell(int gid, int type, float weight, float erosion_probability)
-            : gid(gid), type(type), weight(weight), erosion_probability(erosion_probability) {};
-    Cell(int gid, int type, float weight, float erosion_probability, double average_load)
-            : gid(gid), type(type), weight(weight), erosion_probability(erosion_probability), average_load(average_load) {};
+    std::vector<ContainedElement> elements;
+
+    int gid;
+    TCellType type;
+
+    Cell() : gid(0), type(TCellType::REAL_CELL) {};
+
+    Cell(int gid, TCellType type) : gid(gid), type(type){};
 
     template<class NumericType>
     std::array<NumericType, 3> get_position_as_array() const {
@@ -46,56 +47,46 @@ struct Cell {
 
         MPI_Aint intex, lb, floatex;
 
-        const int number_of_int_elements    = 2;
-        const int number_of_float_elements  = 2;
-        const int number_of_double_elements = 1;
+        const int number_of_int_elements    = 1;
 
-        int blockcount_element[3];
+        int blockcount_element[1];
 
         blockcount_element[0] = number_of_int_elements;    // gid, lid, exit, waiting_time
-        blockcount_element[1] = number_of_float_elements;  // position <x,y>
-        blockcount_element[2] = number_of_double_elements; // position <x,y>
+
         //int
-        MPI_Type_contiguous(number_of_int_elements, MPI_INT, &gid_type_datatype); // position
+        MPI_Type_contiguous(number_of_int_elements, MPI_INT, &gid_type_datatype);
         MPI_Type_commit(&gid_type_datatype);
 
-        MPI_Datatype blocktypes[3];
-        blocktypes[0] = MPI_INT;
-        blocktypes[1] = MPI_FLOAT;
-        blocktypes[2] = MPI_DOUBLE;
+        return {gid_type_datatype, gid_type_datatype};
+    }
 
-        MPI_Type_get_extent(MPI_INT, &lb, &intex);
-        MPI_Type_get_extent(MPI_FLOAT, &lb, &floatex);
-
-        MPI_Aint offset[3];
-        offset[0] = static_cast<MPI_Aint>(0);
-        offset[1] = 2*intex;
-        offset[2] = 2*intex + 2*floatex;
-
-        MPI_Type_create_struct(3, blockcount_element, offset, blocktypes, &cell_datatype);
-        MPI_Type_commit(&cell_datatype);
-
-        return {cell_datatype, gid_type_datatype};
+    void add(ContainedElement e){
+        elements.push_back(e);
     }
 
     static void set_msx(int _msx){
         static int msx = _msx;
     }
+
     static void set_msy(int _msy){
         static int msy = _msy;
     }
+
     static int& get_msx(){
         static int msx;
         return msx;
     }
+
     static int& get_msy(){
         static int msy;
         return msy;
     }
+
     static int& get_msz(){
         static int msz;
         return msz;
     }
+
     static double& get_cell_size(){
         static double size;
         return size;
@@ -112,14 +103,21 @@ struct Cell {
     friend std::ostream &operator<<(std::ostream &os, const Cell &cell) {
         double x,y,z;
         std::tie(x,y,z) = cell.get_center();
-        os << "gid: " << cell.gid << " ("<<x<<";"<<y<<";"<<z <<") type: " << cell.type << " weight: " << cell.weight << " erosion_probability: "
-           << cell.erosion_probability;
+        os << "gid: " << cell.gid << " ("<<x<<";"<<y<<";"<<z <<") type: " << cell.type;
         return os;
     }
 
-    void increase_weight(float v){
-        this->weight+=v;
-    }
 };
 
+template<class T>
+void insert_in_proper_cell(std::vector<Cell<T>>* cells, T&& element) {
+#ifdef DEBUG
+    auto dim = std::cbrt(cells->size());
+    assert(dim == (int) dim); //dim is a perfect cubical root required for searching in linear 3D-array
+#endif
+
+
+}
+
+}
 #endif //ADLBIRREG_CELL_HPP

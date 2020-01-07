@@ -22,7 +22,13 @@ using Tetrahedron_3 = Kernel::Tetrahedron_3;
 using Transformation = CGAL::Aff_transformation_3<Kernel>;
 
 struct Box3 {
-    double xmin, ymin, zmin, xmax, ymax, zmax;
+    double xmin=std::numeric_limits<double>::max(),
+           ymin=std::numeric_limits<double>::max(),
+           zmin=std::numeric_limits<double>::max(),
+           xmax=std::numeric_limits<double>::min(),
+           ymax=std::numeric_limits<double>::min(),
+           zmax=std::numeric_limits<double>::min();
+
 
     friend std::ostream &operator<<(std::ostream &os, const Box3 &box3) {
         os << "xmin: " << box3.xmin << " ymin: " << box3.ymin << " zmin: " << box3.zmin << " xmax: " << box3.xmax
@@ -35,6 +41,14 @@ Point_3 move_vertex(const Point_3& vertex, const Vector_3& force, double mu);
 
 inline std::pair<int, int> cell_to_global_position(int msx, int msy, long long position){
     return std::make_pair(position % msx, (int) position / msx);
+}
+
+inline std::tuple<int, int, int> cell_to_local_position(int msx, int msy, int msz, std::tuple<int, int, int, int, int, int> bounding_box, long long position){
+    int minx, maxx, miny, maxy, minz, maxz; std::tie(minx, maxx, miny, maxy, minz, maxz) = bounding_box;
+    int gidx =  position % msx,
+        gidy = (int) position % (msx*msy) / msx,
+        gidz = (int) position / (msx*msz);
+    return {gidx - minx,  gidy - miny, gidz - minz};
 }
 
 template<class A>
@@ -69,7 +83,6 @@ inline int position_to_cell(Point_3 const& position, const double step, const Nu
  * @return force constrained
  */
 Vector_3 constraint_force(const Box3& d, const Point_3& p, const Vector_3& f);
-
 
 template<class InputPointIterator, class InputPointIdIterator>
 std::array<int, 4> get_points_on_plane(InputPointIterator beg_points, InputPointIterator end_points,

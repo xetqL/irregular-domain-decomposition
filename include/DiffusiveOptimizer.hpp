@@ -31,6 +31,7 @@ public:
         get_MPI_rank(my_rank);
         get_MPI_worldsize(worldsize);
         auto vid = part.vertices_id[com];
+
 #ifdef DEBUG
         std::cout << my_rank << " enters " << __func__ << " with vid "<< vid << " with size " << part.vertex_neighborhood[vid].comm_size << std::endl;
 #endif
@@ -57,7 +58,6 @@ public:
                 remaining_trials = 3;
                 prev_imbalance = current_stats.global;
             }
-
         }
     }
 };

@@ -12,13 +12,19 @@ include_directories(SYSTEM ${MPI_INCLUDE_PATH})
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-
-add_executable(adlbirreg main.cpp
+add_executable(adlbirreg
+        main.cpp
         Partition.cpp
         Domain.cpp
         Cell.cpp
         GeometricUtils.cpp
-        Communicator.cpp Utils.cpp DiffusiveOptimizer.cpp zupply.cpp CLIParser.cpp)
+        Communicator.cpp Utils.cpp DiffusiveOptimizer.cpp zupply.cpp CLIParser.cpp
+        ../include/generate.hpp
+        ../include/ljpotential.hpp
+        ../include/physics.hpp
+        ../include/spatial_elements.hpp
+        ../include/initial_conditions.hpp
+)
 
 add_executable(test_communcation comm.cpp Communicator.cpp)
 
@@ -37,3 +43,8 @@ ELSE()
     message("Optimization activated: -O3")
     add_definitions("-O3")
 ENDIF(CMAKE_BUILD_TYPE MATCHES Debug)
+
+IF(OUTPUTS MATCHES On)
+    message("Will produce outputs")
+    target_compile_definitions(adlbirreg PUBLIC OUTPUT=On)
+ENDIF()

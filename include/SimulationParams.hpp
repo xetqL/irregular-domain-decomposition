@@ -7,6 +7,7 @@
 
 #include <string>
 #include <cmath>
+
 struct SimulationParams {
     unsigned int xprocs = 0;
     unsigned int yprocs = 0;
@@ -15,11 +16,22 @@ struct SimulationParams {
     unsigned int MAX_STEP = 0;
     unsigned int cell_per_process = 0;
     unsigned int interval = MAX_STEP;
-    unsigned int xcells, ycells, zcells;
+    unsigned int xcells,
+                 ycells,
+                 zcells;
+    unsigned int npart;
+    unsigned int simsize_x = 10;
+    unsigned int simsize_y = 10;
+    unsigned int simsize_z = 10;
     int seed = 0;
     bool load_lattice = false;
     bool verbose = false;
     float alpha = 0.0;	
+    float T0 = 0.0;
+    float eps_lj = 0.0;
+    float sig_lj = 0.0;
+    float G = 0.0;
+    float dt = 0.0;
     std::string filename, outputfname;
 
     SimulationParams() {}

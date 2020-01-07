@@ -12,6 +12,7 @@ FetchContent_Declare(
         GIT_TAG        release-1.8.0
 )
 FetchContent_GetProperties(googletest)
+
 if(NOT googletest_POPULATED)
     FetchContent_Populate(googletest)
     add_subdirectory(${googletest_SOURCE_DIR} ${googletest_BINARY_DIR})

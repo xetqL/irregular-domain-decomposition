@@ -17,10 +17,8 @@ double compute_mu(double grid_size, double max_normalized_load);
 int get_rank_from_vertices(const std::array<int, 4>& vertices_id, const std::map<int, Communicator>& neighborhoods);
 int translate_iteration_to_vertex_group(int physical_iteration, lb::Point_3 coord);
 
-
 class Partition {
 public:
-
     using DataIndex = int;
     using ProcRank = int;
     using VertIndex = int;
@@ -183,7 +181,9 @@ public:
                 if(neighbor_rank < 0 || neighbor_rank == my_rank) continue;
                 const auto& neighborhood_domains = neighborhoods[nid];
                 if(neighborhood_domains.contains(point)) {
+#ifdef DEBUG
                     std::cout << "Transferring " << point << " to " << neighbor_rank << std::endl;
+#endif
                     migration_and_destination[nid].second.push_back(elements[data_id]);
                     std::iter_swap(elements.begin() + data_id, elements.end() - 1);
                     elements.pop_back();
@@ -193,9 +193,6 @@ public:
             }
             data_id++;
         }
-
-        //std::cout << "Transfer " << sent_load << " to "<< DBG_RANK << std::endl;
-        //std::cout << my_rank << " transferred " << nb_migrate << std::endl;
 
         {
             //migrate the data
@@ -505,29 +502,13 @@ public:
         while(data_id < elements.size()) {
             auto point = transformer.transform(elements[data_id]);
             bool is_real_cell = this->contains(point);
-
             auto closest_planes = find_planes_closer_than(planes, point, sqrt_3*grid_size);
-            /*if(closest_planes.size() > 0 && is_real_cell) { // IS A NEIGHBORING CELL, i will move it to the proc that share the closest planes
-                for(int nid = 0; nid < number_of_neighbors; ++nid) {
-                    const auto& neighborhood_domains = neighborhoods[nid];
-                    bool found = false;
-                    for(const Plane_3& close_plane : closest_planes) {
-                         found = std::any_of(neighborhood_domains.planes.cbegin(), neighborhood_domains.planes.cend(),
-                                 [&close_plane](const Plane_3& p){return p == close_plane;});
-                         if(found) break;
-                    }
-                    if(found) { // add to ghost data for this proc
-                        neighbor_ghosts[nid].second.push_back(data_id);
-                    }
-                }
-            } else*/ if(!is_real_cell){ // transfer data to neighbor
-                //throw std::runtime_error("?");
+            if(!is_real_cell){ // transfer data to neighbor
                 for(int nid = 0; nid < number_of_neighbors; ++nid) {
                     const auto neighbor_rank = migration_and_destination[nid].first;
                     if(neighbor_rank < 0 || neighbor_rank == my_rank) continue;
                     const auto& neighborhood_domains = neighborhoods[nid];
                     if(neighborhood_domains.contains(point)) {
-                        //std::cout << "Transferring " << point << " to " << neighbor_rank << std::endl;
                         migration_and_destination[nid].second.push_back(elements[data_id]);
                         std::iter_swap(elements.begin() + data_id, elements.end() - 1);
                         elements.pop_back();
@@ -535,14 +516,9 @@ public:
                         break;
                     }
                 }
-            } else {
-                // those are my data
             }
             data_id++;
         }
-
-        //std::cout << "Transfer " << sent_load << " to "<< DBG_RANK << std::endl;
-        //std::cout << my_rank << " transferred " << nb_migrate << std::endl;
 
         {
             //migrate the data
@@ -619,11 +595,9 @@ public:
             std::transform(loads.cbegin(), loads.cend(), std::back_inserter(normalized_loads), [&avg_load](auto n){return n/avg_load;});
             auto f1  = -get_vertex_force(v, cls.second, normalized_loads);
             auto f1_after = constraint_force(d, v, f1);
-
 #ifdef DEBUG
             std::cout << my_rank << " vertex force is "<< f1_after << std::endl;
 #endif
-
             int are_all_valid = false;
             for(int trial = 0; trial < MAX_TRIAL; ++trial) {
                 auto new_vertices = vertices;
@@ -716,8 +690,6 @@ public:
 #ifdef DEBUG
         std::cout << my_rank << " transferred " << nb_migrate  << std::endl;
 #endif
-        //std::cout << "Transfer " << sent_load << " to "<< DBG_RANK << std::endl;
-        //std::cout << my_rank << " transferred " << nb_migrate << std::endl;
 
         {
             //migrate the data
@@ -762,13 +734,7 @@ public:
     const NumericalType get_vertex_id(const Point_3& v, int N) const {
         auto vertices_per_row = (NumericalType) std::cbrt(N)+1;
         const double step = (d.xmax - d.xmin) / (vertices_per_row);
-//        std::cout
-//        << (v.x() / step) << " + "
-//        << vertices_per_row * v.z() / step << " + "
-//        << vertices_per_row * vertices_per_row * v.y() / step << std::endl;
-        //std::cout << v.y() << std::endl;
         return (v.x() / step) + vertices_per_row * v.z() / step  + vertices_per_row * vertices_per_row * v.y() / step;
-        //return position_to_cell<NumericalType>(v, step, proc_per_row, proc_per_row);
     }
 
     void init_communicators(int world_size) {
@@ -809,6 +775,19 @@ public:
            << " ID(" << partition.vertices_id[6] << "): " << partition.vertices[6]
            << " ID(" << partition.vertices_id[7] << "): " << partition.vertices[7];
         return os;
+    }
+
+    inline Box3 get_bounding_box() {
+        Box3 bbox;
+        for(const Point_3& p : vertices) {
+            if(p.x() < bbox.xmin) bbox.xmin = p.x();
+            if(p.y() < bbox.xmin) bbox.ymin = p.y();
+            if(p.z() < bbox.xmin) bbox.zmin = p.z();
+            if(p.x() > bbox.xmax) bbox.xmax = p.x();
+            if(p.y() > bbox.ymax) bbox.ymax = p.y();
+            if(p.z() > bbox.zmax) bbox.zmax = p.z();
+        }
+        return bbox;
     }
 
 };
