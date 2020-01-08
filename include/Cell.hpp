@@ -12,31 +12,54 @@ namespace mesh {
 
 template<class ContainedElement>
 struct Cell {
-
+    using IndexType = long long int;
     std::vector<ContainedElement> elements;
 
-    int gid;
+    IndexType gid, lid;
+
     TCellType type;
 
-    Cell() : gid(0), type(TCellType::REAL_CELL) {};
+    Cell() : gid(0), lid(0), type(TCellType::REAL_CELL) {};
 
-    Cell(int gid, TCellType type) : gid(gid), type(type){};
+    Cell(IndexType gid, TCellType type) : gid(gid), lid(0), type(type) {};
 
-    template<class NumericType>
-    std::array<NumericType, 3> get_position_as_array() const {
-        auto position_as_pair = lb::cell_to_global_position(Cell::get_msx(), Cell::get_msy(), gid);
-        std::array<NumericType, 2> array = {(NumericType) position_as_pair.first, (NumericType) position_as_pair.second};
-        return array;
+    Cell(IndexType gid, lb::Box3 bbox, TCellType type) : gid(gid), type(type) {
+        update_lid(bbox);
+    };
+
+    static Cell get_empty_cell(lb::Box3 bbox, IndexType lid){
+        Cell c;
+        c.lid  = lid;
+        c.type = EMPTY_CELL;
+        IndexType x,y,z;
+        lb::linear_to_grid(lid, bbox.size_x, bbox.size_y, x, y, z);
+        x+=bbox.x_idx_min;
+        y+=bbox.y_idx_min;
+        z+=bbox.z_idx_min;
+        c.gid = lb::grid_index_to_cell(x, y, z, Cell::get_msx(), Cell::get_msy(), Cell::get_msz());
+        return c;
     }
 
-    std::tuple<int, int, int> get_position_as_pair() const {
-        int x,y,z;
-        lb::linear_to_grid(gid, Cell::get_msx(), Cell::get_msy(), x, y, z); //cell_to_global_position(Cell::get_msx(), Cell::get_msy(), gid);
-        return std::make_tuple(x, y, z);
+    void update_lid(lb::Box3 bbox){
+        IndexType x, y, z;
+        lb::cell_to_local_position(Cell::get_msx(), Cell::get_msy(), Cell::get_msz(), bbox, gid, &x, &y, &z);
+        lid  = lb::grid_index_to_cell(x, y, z, bbox.size_x, bbox.size_y, bbox.size_z);
     }
+
+//    template<class NumericType>
+//    std::array<NumericType, 3> get_position_as_array() const {
+//        auto position_as_pair = lb::cell_to_global_position(Cell::get_msx(), Cell::get_msy(), gid);
+//        std::array<NumericType, 2> array = {(NumericType) position_as_pair.first, (NumericType) position_as_pair.second};
+//        return array;
+//    }
+//    std::tuple<int, int, int>  get_position_as_pair()  const {
+//        int x,y,z;
+//        lb::linear_to_grid(gid, Cell::get_msx(), Cell::get_msy(), x, y, z); //cell_to_global_position(Cell::get_msx(), Cell::get_msy(), gid);
+//        return std::make_tuple(x, y, z);
+//    }
 
     std::tuple<double, double, double> get_center() const {
-        int x, y, z;
+        IndexType x, y, z;
         lb::linear_to_grid(gid, Cell::get_msx(), Cell::get_msy(), x, y, z); //cell_to_global_position(Cell::get_msx(), Cell::get_msy(), gid);
         return std::make_tuple(x*Cell::get_cell_size()+Cell::get_cell_size()/2.0, y*Cell::get_cell_size()+Cell::get_cell_size()/2.0, z*Cell::get_cell_size()+Cell::get_cell_size()/2.0);
     }
@@ -64,26 +87,18 @@ struct Cell {
         elements.push_back(e);
     }
 
-    static void set_msx(int _msx){
-        static int msx = _msx;
-    }
-
-    static void set_msy(int _msy){
-        static int msy = _msy;
-    }
-
-    static int& get_msx(){
-        static int msx;
+    static IndexType& get_msx(){
+        static IndexType msx;
         return msx;
     }
 
-    static int& get_msy(){
-        static int msy;
+    static IndexType& get_msy(){
+        static IndexType msy;
         return msy;
     }
 
-    static int& get_msz(){
-        static int msz;
+    static IndexType& get_msz(){
+        static IndexType msz;
         return msz;
     }
 
@@ -115,7 +130,6 @@ void insert_in_proper_cell(std::vector<Cell<T>>* cells, T&& element) {
     auto dim = std::cbrt(cells->size());
     assert(dim == (int) dim); //dim is a perfect cubical root required for searching in linear 3D-array
 #endif
-
 
 }
 

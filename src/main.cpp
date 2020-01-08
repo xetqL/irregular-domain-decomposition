@@ -24,10 +24,10 @@ inline int bitselect(int condition, int truereturnvalue, int falsereturnvalue) {
     return (truereturnvalue & -condition) | (falsereturnvalue & ~(-condition)); //a when TRUE and b when FintLSE
 }
 
-std::vector<Cell> generate_lattice_single_type( int msx, int msy, int msz,
-                                                int x_proc_idx, int y_proc_idx, int z_proc_idx,
-                                                int cell_in_my_cols, int cell_in_my_rows, int cell_in_my_depth,
-                                                mesh::TCellType type, float weight, float erosion_probability) {
+std::vector<Cell> generate_lattice_single_type( long long int msx, long long int msy, long long int msz,
+                                                long long int x_proc_idx, long long int y_proc_idx, long long int z_proc_idx,
+                                                long long int cell_in_my_cols, long long int cell_in_my_rows, long long int cell_in_my_depth,
+                                                mesh::TCellType type) {
 
     int cell_per_process = cell_in_my_cols * cell_in_my_rows;
     std::vector<Cell> my_cells; my_cells.reserve(cell_per_process);
@@ -74,7 +74,7 @@ struct GridPointTransformer {
 
 }
 
-void generate_lattice_rocks(const int rocks_per_stripe, int msx, int msy,
+void generate_lattice_rocks(const int rocks_per_stripe, int msx, int msy, int msz,
                             std::vector<Cell>* _cells,
                             float erosion_probability,
                             int begin_stripe, int end_stripe){
@@ -99,10 +99,12 @@ void generate_lattice_rocks(const int rocks_per_stripe, int msx, int msy,
     for(auto& cell : cells) {
         int cx, cy, cr;
         int gid = cell.gid;
-        auto pos = lb::cell_to_global_position(msx, msy, gid);
+        long long int x,y,z;
+        auto pos = lb::cell_to_global_position(msx, msy, msz, gid);
+        std::tie(x,y,z) = pos;
         for(auto& rock : rocks_data){
             std::tie(cx, cy, cr) = rock;
-            if(std::sqrt( std::pow(cx-pos.first, 2) + std::pow(cy - pos.second, 2) ) < cr) {
+            if(std::sqrt( std::pow(cx-x, 2) + std::pow(cy - y, 2) ) < cr) {
                 cell.type  = mesh::TCellType::REAL_CELL;
                 break;
             }
@@ -152,9 +154,9 @@ int main(int argc, char** argv) {
 
     lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z);
 
-    int procs_x = params.xprocs,
-        procs_y = params.yprocs,
-        procs_z = params.zprocs;
+    long long int procs_x = params.xprocs,
+                  procs_y = params.yprocs,
+                  procs_z = params.zprocs;
 
     const unsigned int xprocs = params.xprocs,
                        yprocs = params.yprocs,
@@ -175,9 +177,9 @@ int main(int argc, char** argv) {
     Cell::get_msy() = ycells;
     Cell::get_msz() = zcells;
 
-    int& msx = Cell::get_msx();
-    int& msy = Cell::get_msy();
-    int& msz = Cell::get_msz();
+    auto& msx = Cell::get_msx();
+    auto& msy = Cell::get_msy();
+    auto& msz = Cell::get_msz();
 
     Cell::get_cell_size() = (double) DOMAIN_SIZE_X / (double) xcells;
 
@@ -197,16 +199,16 @@ int main(int argc, char** argv) {
 
     std::normal_distribution<double> normal_distribution(1.0 + my_rank % 2, 0.2);
 
-    int nb_cells_x = (int) (DOMAIN_SIZE_X / (double) procs_x / d.grid_cell_size);
-    int nb_cells_y = (int) (DOMAIN_SIZE_Y / (double) procs_y / d.grid_cell_size);
-    int nb_cells_z = (int) (DOMAIN_SIZE_Z / (double) procs_z / d.grid_cell_size);
+    auto nb_cells_x = (long long int) (DOMAIN_SIZE_X / (double) procs_x / d.grid_cell_size);
+    auto nb_cells_y = (long long int) (DOMAIN_SIZE_Y / (double) procs_y / d.grid_cell_size);
+    auto nb_cells_z = (long long int) (DOMAIN_SIZE_Z / (double) procs_z / d.grid_cell_size);
 
-    int x_proc_idx, y_proc_idx, z_proc_idx;
-    lb::linear_to_grid(my_rank, procs_x, procs_y, x_proc_idx, y_proc_idx, z_proc_idx);
+    long long int x_proc_idx, y_proc_idx, z_proc_idx;
+    lb::linear_to_grid((long long int) my_rank, procs_x, procs_y, x_proc_idx, y_proc_idx, z_proc_idx);
 
     std::vector<Cell> my_cells; my_cells.reserve(cell_per_process);
 
-    my_cells = generate_lattice_single_type(msx, msy, msz, x_proc_idx, y_proc_idx, z_proc_idx, cell_in_my_cols, cell_in_my_rows, cell_in_my_depth, mesh::TCellType::REAL_CELL, 0.00001, 0.0);
+    my_cells = generate_lattice_single_type(msx, msy, msz, x_proc_idx, y_proc_idx, z_proc_idx, cell_in_my_cols, cell_in_my_rows, cell_in_my_depth, mesh::TCellType::REAL_CELL);
 
     {
         std::vector<Particle> particles;

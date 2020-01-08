@@ -10,6 +10,7 @@
 #include <Utils.hpp>
 #include <Communicator.hpp>
 #include <set>
+#include "Cell.hpp"
 
 namespace lb{
 
@@ -619,6 +620,7 @@ public:
         else {std::cout << "Skipping " << vid << std::endl;}
 #endif
 
+
         //*******************************************************
         // at this point we are sure that:
         // 1) Vertices have moved
@@ -668,25 +670,38 @@ public:
         size_t data_id = 0;
         size_t nb_migrate = 0;
         double sent_load = 0;
+        lb::Box3 bbox(vertices, A::get_cell_size());
+        /* resize to my bounding box */
+        elements.resize(bbox.get_number_of_cells());
         while(data_id < elements.size()) {
             auto point = transformer.transform(elements[data_id]);
             bool is_real_cell = this->contains(point);
-            if(!is_real_cell) { // transfer data to neighbor
-                for(int nid = 0; nid < number_of_neighbors; ++nid) {
-                    const auto neighbor_rank = migration_and_destination[nid].first;
-                    if(neighbor_rank < 0 || neighbor_rank == my_rank) continue;
-                    const auto& neighborhood_domains = neighborhoods[nid];
-                    if(neighborhood_domains.contains(point)) {
-                        migration_and_destination[nid].second.push_back(elements[data_id]);
-                        std::iter_swap(elements.begin() + data_id, elements.end() - 1);
-                        elements.pop_back();
-                        nb_migrate++;
-                        break;
+            elements[data_id].update_lid(bbox);
+            if(!is_real_cell) { // it is not in my polygon
+                /* is it a REAL_CELL that must be migrated ? */
+                if(elements[data_id].type == mesh::REAL_CELL) {
+                    for (int nid = 0; nid < number_of_neighbors; ++nid) {
+                        const auto neighbor_rank = migration_and_destination[nid].first;
+                        if (neighbor_rank < 0 || neighbor_rank == my_rank) continue;
+                        const auto &neighborhood_domains = neighborhoods[nid];
+                        if (neighborhood_domains.contains(point)) {
+                            migration_and_destination[nid].second.push_back(elements[data_id]);
+                            std::iter_swap(elements.begin() + data_id, elements.end() - 1);
+                            *(elements.end() - 1) = A::get_empty_cell(bbox, data_id);
+                            nb_migrate++;
+                            break;
+                        }
                     }
+                    throw std::runtime_error("Real cell must belong to someone");
+                } else { // replace by an empty cell with the proper local_id
+                    elements[data_id] = A::get_empty_cell(bbox, data_id);
                 }
-            }
-            data_id++;
+            } else if(data_id != elements[data_id].lid) { // contained by polygon but wrong local id
+                /* Swap with the guy that steal my place, then continue... */
+                std::iter_swap(elements.begin() + data_id, elements.begin() + elements[data_id].lid);
+            } else data_id++; // otherwise contained by polygon + at the good local id, check the next one
         }
+
 #ifdef DEBUG
         std::cout << my_rank << " transferred " << nb_migrate  << std::endl;
 #endif
@@ -776,20 +791,6 @@ public:
            << " ID(" << partition.vertices_id[7] << "): " << partition.vertices[7];
         return os;
     }
-
-    inline Box3 get_bounding_box() {
-        Box3 bbox;
-        for(const Point_3& p : vertices) {
-            if(p.x() < bbox.xmin) bbox.xmin = p.x();
-            if(p.y() < bbox.xmin) bbox.ymin = p.y();
-            if(p.z() < bbox.xmin) bbox.zmin = p.z();
-            if(p.x() > bbox.xmax) bbox.xmax = p.x();
-            if(p.y() > bbox.ymax) bbox.ymax = p.y();
-            if(p.z() > bbox.zmax) bbox.zmax = p.z();
-        }
-        return bbox;
-    }
-
 };
 }
 

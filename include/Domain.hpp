@@ -43,7 +43,7 @@ struct Domain {
     }
 
     inline const Box3 get_box() const {
-        return {xmin(), ymin(), zmin(), xmax(), ymax(), zmax()};
+        return {xmin(), xmax(), ymin(), ymax(), zmin(), zmax(), grid_cell_size};
     }
 
     inline const double xsize() const {
@@ -65,6 +65,7 @@ struct Domain {
     explicit Domain (std::vector<Partition>& partitions): partitions(partitions) {}
 
     int num_part;
+
     Domain (const int x, const int y, const int z):
             v1(0, 0, 0),
             v2(x, 0, 0),

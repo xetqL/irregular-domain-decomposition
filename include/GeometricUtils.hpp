@@ -21,6 +21,8 @@ using Vector_3 = Kernel::Vector_3;
 using Tetrahedron_3 = Kernel::Tetrahedron_3;
 using Transformation = CGAL::Aff_transformation_3<Kernel>;
 
+const double sqrt_3 = std::sqrt(3);
+
 struct Box3 {
     double xmin=std::numeric_limits<double>::max(),
            ymin=std::numeric_limits<double>::max(),
@@ -29,33 +31,112 @@ struct Box3 {
            ymax=std::numeric_limits<double>::min(),
            zmax=std::numeric_limits<double>::min();
 
+    double step;
+
+    long long x_idx_min,
+              y_idx_min,
+              z_idx_min,
+              x_idx_max,
+              y_idx_max,
+              z_idx_max,
+              size_x,
+              size_y,
+              size_z;
+
+
+
+    Box3 (const std::array<Point_3, 8>& vertices, double step) : step(step) {
+        for(const Point_3& p : vertices) {
+            if(p.x() < xmin) xmin = p.x();
+            if(p.y() < xmin) ymin = p.y();
+            if(p.z() < xmin) zmin = p.z();
+            if(p.x() > xmax) xmax = p.x();
+            if(p.y() > ymax) ymax = p.y();
+            if(p.z() > zmax) zmax = p.z();
+        }
+
+        x_idx_min = (xmin / step);
+        y_idx_min = (ymin / step);
+        z_idx_min = (zmin / step);
+        x_idx_max = (xmax / step);
+        y_idx_max = (ymax / step);
+        z_idx_max = (zmax / step);
+
+        size_x = x_idx_max - x_idx_min;
+        size_y = y_idx_max - y_idx_min;
+        size_z = z_idx_max - z_idx_min;
+    }
+
+    Box3(double xmin, double xmax, double ymin, double ymax, double zmin, double zmax, double step) :
+        xmin(xmin), xmax(xmax), ymin(ymin), ymax(ymax), zmin(zmin), zmax(zmax), step(step){
+        x_idx_min = (xmin / step);
+        y_idx_min = (ymin / step);
+        z_idx_min = (zmin / step);
+        x_idx_max = (xmax / step);
+        y_idx_max = (ymax / step);
+        z_idx_max = (zmax / step);
+        size_x = x_idx_max - x_idx_min;
+        size_y = y_idx_max - y_idx_min;
+        size_z = z_idx_max - z_idx_min;
+    }
 
     friend std::ostream &operator<<(std::ostream &os, const Box3 &box3) {
         os << "xmin: " << box3.xmin << " ymin: " << box3.ymin << " zmin: " << box3.zmin << " xmax: " << box3.xmax
            << " ymax: " << box3.ymax << " zmax: " << box3.zmax;
         return os;
     }
+
+    long long get_number_of_cells() {
+        return (x_idx_max - x_idx_min) * (y_idx_max - y_idx_min) * (z_idx_max - z_idx_min);
+    }
 };
 
 Point_3 move_vertex(const Point_3& vertex, const Vector_3& force, double mu);
 
-inline std::pair<int, int> cell_to_global_position(int msx, int msy, long long position){
-    return std::make_pair(position % msx, (int) position / msx);
+inline std::tuple<int, int, int> cell_to_global_position(int msx, int msy, int msz, long long index){
+    auto gidx = index % msx,
+         gidy = (long long) std::floor(index % (msx*msy) / msx),
+         gidz = (long long) std::floor(index / (msx*msy));
+    return std::make_tuple(gidx, gidy, gidz);
 }
 
-inline std::tuple<int, int, int> cell_to_local_position(int msx, int msy, int msz, std::tuple<int, int, int, int, int, int> bounding_box, long long position){
-    int minx, maxx, miny, maxy, minz, maxz; std::tie(minx, maxx, miny, maxy, minz, maxz) = bounding_box;
-    int gidx =  position % msx,
-        gidy = (int) position % (msx*msy) / msx,
-        gidz = (int) position / (msx*msz);
+inline std::tuple<int, int, int> cell_to_local_position(int msx, int msy, int msz, Box3 bbox, long long index){
+    auto minx = bbox.x_idx_min,
+         maxx = bbox.x_idx_max,
+         miny = bbox.y_idx_min,
+         maxy = bbox.y_idx_max,
+         minz = bbox.z_idx_min,
+         maxz = bbox.z_idx_max;
+
+    int gidx =  index % msx,
+        gidy = (int) index % (msx*msy) / msx,
+        gidz = (int) index / (msx*msy);
+
     return {gidx - minx,  gidy - miny, gidz - minz};
 }
 
+inline void cell_to_local_position(int msx, int msy, int msz, Box3 bbox, long long index, long long* x_idx, long long* y_idx, long long* z_idx){
+    auto minx = bbox.x_idx_min,
+         maxx = bbox.x_idx_max,
+         miny = bbox.y_idx_min,
+         maxy = bbox.y_idx_max,
+         minz = bbox.z_idx_min,
+         maxz = bbox.z_idx_max;
+
+    auto gidx = index % msx,
+         gidy = (long long) std::floor(index % (msx*msy) / msx),
+         gidz = (long long) std::floor(index / (msx*msy));
+
+    *x_idx = gidx - minx;
+    *y_idx = gidy - miny;
+    *z_idx = gidz - minz;
+}
+
 template<class A>
-inline void linear_to_grid(const A index, const A c, const A r, int& x_idx, int& y_idx, int& z_idx){
-    x_idx = (int) (index % (c*r) % c);           // col
-    y_idx = (int) std::floor(index % (c*r) / c); // row
-    z_idx = (int) std::floor(index / (c*r));     // depth
+inline void linear_to_grid(const A index, const A c, const A r, A& x_idx, A& y_idx, A& z_idx){
+    x_idx = (A) (index % c);           // col
+    y_idx = (A) std::floor(index % (c*r) / c); // row
+    z_idx = (A) std::floor(index / (c*r));     // depth
     assert(x_idx < c);
     assert(y_idx < r);
 };
@@ -66,11 +147,38 @@ inline int position_to_cell(Point_3 const& position, const double step, const Nu
         const NumericalType row_shift  = 0.0,
         const NumericalType depth_shift= 0.0) {
     const std::vector<NumericalType> weight = {1, column, column*row};
-    NumericalType idx = 0;
 
+    NumericalType idx = 0;
     idx += (NumericalType) std::floor(position.x() / step);
     idx += column * (NumericalType) std::floor(position.y() / step);
     idx += column * row * (NumericalType) std::floor(position.z() / step);
+
+    return idx;
+}
+
+template<class NumericalType, class IndexType>
+inline int position_to_cell(IndexType x, IndexType y, IndexType z, const double step, const NumericalType column, const NumericalType row,
+                            const NumericalType col_shift  = 0.0,
+                            const NumericalType row_shift  = 0.0,
+                            const NumericalType depth_shift= 0.0) {
+    const std::vector<NumericalType> weight = {1, column, column*row};
+    NumericalType idx = 0;
+
+    idx += (NumericalType) std::floor(x / step);
+    idx += column * (NumericalType) std::floor(y / step);
+    idx += column * row * (NumericalType) std::floor(z / step);
+
+    return idx;
+}
+
+template<class IndexType>
+inline IndexType grid_index_to_cell(IndexType x, IndexType y, IndexType z, const IndexType column, const IndexType row, const IndexType depth) {
+    const std::vector<IndexType> weight = {1, column, column*row};
+    IndexType idx = 0;
+
+    idx += x;
+    idx += column * y;
+    idx += column * row * z;
 
     return idx;
 }
@@ -98,7 +206,6 @@ std::array<int, 4> get_points_on_plane(InputPointIterator beg_points, InputPoint
     return on_plane;
 }
 
-const double sqrt_3 = std::sqrt(3);
 
 inline double lb_getTetraederVolumeIndexed(int c1, int c2, int c3, int c4, const std::array<Point_3, 8>& vertices) {
     double dir1_0, dir1_1, dir1_2;
@@ -141,21 +248,6 @@ inline Point_3 operator+(const Point_3& p1, const Point_3& p2){
 
 Point_3 get_center_of_load(const std::vector<double>& weights, const std::vector<Point_3>& elements);
 
-/*
-std::vector<Point_3> get_centers_of_load_for_vertex(const Point_3& cl, MPI_Comm neighborhood){
-    int N;
-    MPI_Comm_size(neighborhood, &N);
-    std::vector<Point_3> centers_of_load(N);
-    std::vector<double>  _centers_of_load(N*3);
-    std::array<double,3> my_cl = {cl.x(), cl.y(), cl.z()};
-    MPI_Alltoall(my_cl.data(), 3, MPI_DOUBLE, _centers_of_load.data(), 3, MPI_DOUBLE, neighborhood);
-    for(int i = 0; i < N; ++i) {
-        centers_of_load[i] = Point_3(_centers_of_load[i*3],_centers_of_load[i*3+1],_centers_of_load[i*3+2]);
-    }
-    return centers_of_load;
-}
- */
-
 double compute_normalized_load(double my_load, double unit);
 
 inline Vector_3 get_direction(const Point_3& vertex, const Point_3& center_of_load) {
@@ -176,6 +268,7 @@ std::vector<Point_3> get_points(InputIterator beg, InputIterator end){
     }
     return points;
 }
+
 template<class A>
 bool is_there_duplicates(const std::vector<A>& els){
     const auto sz = els.size();
@@ -189,6 +282,7 @@ bool is_there_duplicates(const std::vector<A>& els){
     }
     return false;
 }
+
 template<class A>
 bool exists(const A& el, const std::vector<A>& els){
     const auto sz = els.size();
