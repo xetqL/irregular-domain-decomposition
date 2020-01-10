@@ -121,7 +121,7 @@ std::tuple<int, int, int> linear_to_grid(const long long index, const long long 
     assert(y_idx < r);
     assert(z_idx < r);
     return std::make_tuple(x_idx, y_idx, z_idx);
-};
+}
 
 std::pair<int, int> cell_to_global_position(int msx, int msy, long long position) {
     return std::make_pair(position % msx, (int) position / msx);
@@ -136,7 +136,7 @@ int main(int argc, char** argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
     rank = my_rank;
-    auto cellDatatype = Cell::register_datatype().element_datatype;
+    //auto cellDatatype = Cell::register_datatype().element_datatype;
 
     SimulationParams params;
     bool err;
@@ -188,7 +188,7 @@ int main(int argc, char** argv) {
         std::cout << "Cell size = " << Cell::get_cell_size() << std::endl;
         std::cout << "Domain size X = "<< (cell_in_my_rows  * xprocs * Cell::get_cell_size()) << std::endl;
     }
-    auto datatype_wrapper = Cell::register_datatype();
+    //auto datatype_wrapper = Cell::register_datatype();
     d.bootstrap_partitions(world_size);
 
     auto part = d.get_my_partition(my_rank);
@@ -199,9 +199,9 @@ int main(int argc, char** argv) {
 
     std::normal_distribution<double> normal_distribution(1.0 + my_rank % 2, 0.2);
 
-    auto nb_cells_x = (long long int) (DOMAIN_SIZE_X / (double) procs_x / d.grid_cell_size);
-    auto nb_cells_y = (long long int) (DOMAIN_SIZE_Y / (double) procs_y / d.grid_cell_size);
-    auto nb_cells_z = (long long int) (DOMAIN_SIZE_Z / (double) procs_z / d.grid_cell_size);
+    //auto nb_cells_x = (long long int) (DOMAIN_SIZE_X / (double) procs_x / d.grid_cell_size);
+    //auto nb_cells_y = (long long int) (DOMAIN_SIZE_Y / (double) procs_y / d.grid_cell_size);
+    //auto nb_cells_z = (long long int) (DOMAIN_SIZE_Z / (double) procs_z / d.grid_cell_size);
 
     long long int x_proc_idx, y_proc_idx, z_proc_idx;
     lb::linear_to_grid((long long int) my_rank, procs_x, procs_y, x_proc_idx, y_proc_idx, z_proc_idx);
@@ -210,13 +210,13 @@ int main(int argc, char** argv) {
 
     my_cells = generate_lattice_single_type(msx, msy, msz, x_proc_idx, y_proc_idx, z_proc_idx, cell_in_my_cols, cell_in_my_rows, cell_in_my_depth, mesh::TCellType::REAL_CELL);
 
-    {
+    if(!rank){
         std::vector<Particle> particles;
         auto rejection_condition = std::make_shared<initial_condition::lennard_jones::RejectionCondition<DIMENSION>>(
                 &particles, params.sig_lj, 6.25 * params.sig_lj * params.sig_lj, params.T0, 0, 0, 0,
                 params.simsize_x, params.simsize_y, params.simsize_z
         );
-        auto elements_generators = init_generator(rejection_condition, 0, &params);
+        auto elements_generators = init_generator(rejection_condition, 1, &params);
         int cfg_idx = 0;
         while (!elements_generators.empty()) {
             std::cout << "Starting generation of particles with configuration ("
@@ -227,11 +227,11 @@ int main(int argc, char** argv) {
             std::cout << el_gen.second <<"/"<< params.npart << " particles generated." << std::endl;
             cfg_idx++;
         }
-
     }
 
-    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    part.move_data<Particle>(my_cells);
 
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     auto stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
 
@@ -240,7 +240,7 @@ int main(int argc, char** argv) {
     double mu = 1.0;
 
     auto all_loads = get_neighbors_load(stats.my_load, MPI_COMM_WORLD); //global load balancing with MPI_COMM_WORLD
-    auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / world_size;
+    //auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / world_size;
 
     std::array<std::vector<double>, 8>  com_lb_time; std::fill(com_lb_time.begin(), com_lb_time.end(), std::vector<double>());
     std::array<double, 8>  com_degradation; std::fill(com_degradation.begin(), com_degradation.end(), 0.0);
@@ -264,13 +264,10 @@ int main(int argc, char** argv) {
     std::vector<double> imbalance_over_time, virtual_times(MAX_ITER, 0.0), cum_vtime(MAX_ITER, 0.0);
 
     bool lb_decision = false;
-    lb::GridPointTransformer transformer;
 
-    part.move_data<lb::GridPointTransformer, Cell>(my_cells, datatype_wrapper.element_datatype);
+    std::sort(my_cells.begin(), my_cells.end(), [](Cell &a, Cell &b) {return a.gid < b.gid;} );
 
-    std::sort(my_cells.begin(), my_cells.end(), [](Cell a, Cell b) {return a.gid < b.gid;} );
-
-    lb::DiffusiveOptimizer<lb::GridPointTransformer, lb::GridElementComputer, Cell> opt;
+    lb::DiffusiveOptimizer<Particle, lb::GridElementComputer> opt;
 #ifdef OUTPUT
     for(int i = 0; i < world_size; ++i){
         if(my_rank == i) {
@@ -312,10 +309,10 @@ int main(int argc, char** argv) {
         lb_decision = degradation_since_last_lb >= avg_lb_cost;
         std::cout << my_rank << " >> "<< j << "; com = "<< com << " " << (lb_decision ? "True" : "False") << std::endl;
 
-        if(lb_decision) {
+        if(true) {
 
             auto start_time = MPI_Wtime();
-            opt.optimize_neighborhood(com, part, my_cells, datatype_wrapper.element_datatype, mu);
+            opt.optimize_neighborhood(com, part, my_cells, mu);
             double lb_time  = MPI_Wtime() - start_time;
 
             {

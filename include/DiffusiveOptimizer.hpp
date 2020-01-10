@@ -23,11 +23,11 @@ inline void print_load_statitics(Partition::LoadStatistics stats){
               << "       My Load Imbalance: " << my_imbalance      <<
               "\n===============================================" << std::endl;
 }
-template<class GridPointTransformer, class GridElementComputer, class Cell>
+template<class A, class GridElementComputer >
 class DiffusiveOptimizer {
 
 public:
-    void optimize_neighborhood(int com, Partition& part, std::vector<Cell>& my_cells, MPI_Datatype datatype, double init_mu) {
+    void optimize_neighborhood(int com, Partition& part, std::vector<mesh::Cell<A>> & my_cells, Real init_mu) {
         get_MPI_rank(my_rank);
         get_MPI_worldsize(worldsize);
         auto vid = part.vertices_id[com];
@@ -35,19 +35,19 @@ public:
 #ifdef DEBUG
         std::cout << my_rank << " enters " << __func__ << " with vid "<< vid << " with size " << part.vertex_neighborhood[vid].comm_size << std::endl;
 #endif
-        GridElementComputer lc;
+        //GridElementComputer lc;
 
         auto stats = part.get_neighborhood_load_statistics<GridElementComputer>(com, my_cells);
         auto my_load = stats.my_load;
         auto prev_imbalance = stats.global;
         auto avg_load = stats.avg_load;
 
-        double delta_load = 0;
+        Real delta_load = 0;
         unsigned int remaining_trials = 3;
-        double mu = init_mu;
+        Real mu = init_mu;
         while(remaining_trials) {
-            auto data = part.move_selected_vertices<GridPointTransformer, GridElementComputer, Cell>
-                    (com, my_cells, datatype, avg_load, mu, &delta_load);
+            auto data = part.move_selected_vertices<GridElementComputer, A>
+                    (com, my_cells, avg_load, mu, &delta_load);
             my_load += delta_load;
             auto current_stats = part.get_neighborhood_load_statistics(com, my_load, my_cells.size());
 

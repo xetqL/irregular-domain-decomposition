@@ -11,10 +11,12 @@
 #include <CGAL/Aff_transformation_3.h>
 #include <CGAL/squared_distance_3.h>
 #include <ostream>
-
+#include "Types.hpp"
 namespace lb {
 
-using Kernel = CGAL::Cartesian<double> ;
+using namespace type;
+
+using Kernel = CGAL::Cartesian<Real> ;
 using Point_3 = CGAL::Point_3<Kernel>;
 using Plane_3 = CGAL::Plane_3<Kernel>;
 using Vector_3 = Kernel::Vector_3;
@@ -24,16 +26,16 @@ using Transformation = CGAL::Aff_transformation_3<Kernel>;
 const double sqrt_3 = std::sqrt(3);
 
 struct Box3 {
-    double xmin=std::numeric_limits<double>::max(),
-           ymin=std::numeric_limits<double>::max(),
-           zmin=std::numeric_limits<double>::max(),
-           xmax=std::numeric_limits<double>::min(),
-           ymax=std::numeric_limits<double>::min(),
-           zmax=std::numeric_limits<double>::min();
+    Real xmin=std::numeric_limits<Real>::max(),xmax=std::numeric_limits<Real>::min(),
+           ymin=std::numeric_limits<Real>::max(),ymax=std::numeric_limits<Real>::min(),
+           zmin=std::numeric_limits<Real>::max(), zmax=std::numeric_limits<Real>::min();
 
-    double step;
 
-    long long x_idx_min,
+
+
+    Real step;
+
+    DataIndex x_idx_min,
               y_idx_min,
               z_idx_min,
               x_idx_max,
@@ -45,7 +47,7 @@ struct Box3 {
 
 
 
-    Box3 (const std::array<Point_3, 8>& vertices, double step) : step(step) {
+    Box3 (const std::array<Point_3, 8>& vertices, Real step) : step(step) {
         for(const Point_3& p : vertices) {
             if(p.x() < xmin) xmin = p.x();
             if(p.y() < xmin) ymin = p.y();
@@ -67,7 +69,7 @@ struct Box3 {
         size_z = z_idx_max - z_idx_min;
     }
 
-    Box3(double xmin, double xmax, double ymin, double ymax, double zmin, double zmax, double step) :
+    Box3(Real xmin, Real xmax, Real ymin, Real ymax, Real zmin, Real zmax, Real step) :
         xmin(xmin), xmax(xmax), ymin(ymin), ymax(ymax), zmin(zmin), zmax(zmax), step(step){
         x_idx_min = (xmin / step);
         y_idx_min = (ymin / step);
@@ -86,46 +88,40 @@ struct Box3 {
         return os;
     }
 
-    long long get_number_of_cells() {
+    DataIndex get_number_of_cells() {
         return (x_idx_max - x_idx_min) * (y_idx_max - y_idx_min) * (z_idx_max - z_idx_min);
     }
 };
 
-Point_3 move_vertex(const Point_3& vertex, const Vector_3& force, double mu);
+Point_3 move_vertex(const Point_3& vertex, const Vector_3& force, Real mu);
 
-inline std::tuple<int, int, int> cell_to_global_position(int msx, int msy, int msz, long long index){
+inline std::tuple<DataIndex, DataIndex, DataIndex> cell_to_global_position(DataIndex msx, DataIndex msy, DataIndex msz, DataIndex index){
     auto gidx = index % msx,
-         gidy = (long long) std::floor(index % (msx*msy) / msx),
-         gidz = (long long) std::floor(index / (msx*msy));
+         gidy = (DataIndex) std::floor(index % (msx*msy) / msx),
+         gidz = (DataIndex) std::floor(index / (msx*msy));
     return std::make_tuple(gidx, gidy, gidz);
 }
 
-inline std::tuple<int, int, int> cell_to_local_position(int msx, int msy, int msz, Box3 bbox, long long index){
+inline std::tuple<DataIndex, DataIndex, DataIndex> cell_to_local_position(DataIndex msx, DataIndex msy, DataIndex msz, Box3 bbox, DataIndex index){
     auto minx = bbox.x_idx_min,
-         maxx = bbox.x_idx_max,
          miny = bbox.y_idx_min,
-         maxy = bbox.y_idx_max,
-         minz = bbox.z_idx_min,
-         maxz = bbox.z_idx_max;
+         minz = bbox.z_idx_min;
 
-    int gidx =  index % msx,
-        gidy = (int) index % (msx*msy) / msx,
-        gidz = (int) index / (msx*msy);
+    auto gidx =  index % msx,
+         gidy = (DataIndex) index % (msx*msy) / msx,
+         gidz = (DataIndex) index / (msx*msy);
 
     return {gidx - minx,  gidy - miny, gidz - minz};
 }
 
-inline void cell_to_local_position(int msx, int msy, int msz, Box3 bbox, long long index, long long* x_idx, long long* y_idx, long long* z_idx){
+inline void cell_to_local_position(DataIndex msx, DataIndex msy, DataIndex msz, Box3 bbox, DataIndex index, DataIndex* x_idx, DataIndex* y_idx, DataIndex* z_idx){
     auto minx = bbox.x_idx_min,
-         maxx = bbox.x_idx_max,
          miny = bbox.y_idx_min,
-         maxy = bbox.y_idx_max,
-         minz = bbox.z_idx_min,
-         maxz = bbox.z_idx_max;
+         minz = bbox.z_idx_min;
 
     auto gidx = index % msx,
-         gidy = (long long) std::floor(index % (msx*msy) / msx),
-         gidz = (long long) std::floor(index / (msx*msy));
+         gidy = (DataIndex) std::floor(index % (msx*msy) / msx),
+         gidz = (DataIndex) std::floor(index / (msx*msy));
 
     *x_idx = gidx - minx;
     *y_idx = gidy - miny;
@@ -139,10 +135,10 @@ inline void linear_to_grid(const A index, const A c, const A r, A& x_idx, A& y_i
     z_idx = (A) std::floor(index / (c*r));     // depth
     assert(x_idx < c);
     assert(y_idx < r);
-};
+}
 
 template<class NumericalType>
-inline int position_to_cell(Point_3 const& position, const double step, const NumericalType column, const NumericalType row,
+inline NumericalType position_to_cell(Point_3 const& position, const Real step, const NumericalType column, const NumericalType row,
         const NumericalType col_shift  = 0.0,
         const NumericalType row_shift  = 0.0,
         const NumericalType depth_shift= 0.0) {
@@ -157,7 +153,7 @@ inline int position_to_cell(Point_3 const& position, const double step, const Nu
 }
 
 template<class NumericalType, class IndexType>
-inline int position_to_cell(IndexType x, IndexType y, IndexType z, const double step, const NumericalType column, const NumericalType row,
+inline int position_to_cell(IndexType x, IndexType y, IndexType z, const Real step, const NumericalType column, const NumericalType row,
                             const NumericalType col_shift  = 0.0,
                             const NumericalType row_shift  = 0.0,
                             const NumericalType depth_shift= 0.0) {
@@ -207,10 +203,10 @@ std::array<int, 4> get_points_on_plane(InputPointIterator beg_points, InputPoint
 }
 
 
-inline double lb_getTetraederVolumeIndexed(int c1, int c2, int c3, int c4, const std::array<Point_3, 8>& vertices) {
-    double dir1_0, dir1_1, dir1_2;
-    double dir2_0, dir2_1, dir2_2;
-    double dir3_0, dir3_1, dir3_2;
+inline Real lb_getTetraederVolumeIndexed(DataIndex c1, DataIndex c2, DataIndex c3, DataIndex c4, const std::array<Point_3, 8>& vertices) {
+    Real dir1_0, dir1_1, dir1_2;
+    Real dir2_0, dir2_1, dir2_2;
+    Real dir3_0, dir3_1, dir3_2;
 
     dir1_0 = vertices[c2].x() - vertices[c1].x();
     dir1_1 = vertices[c2].y() - vertices[c1].y();
@@ -238,7 +234,7 @@ std::array<Plane_3, 12> get_planes(const std::array<Point_3, 8>& vertices);
 
 std::array<Tetrahedron_3, 6> get_tetrahedra(const std::array<Point_3, 8>& vertices);
 
-inline Point_3 operator*(const double w, const Point_3& p){
+inline Point_3 operator*(const Real w, const Point_3& p){
     return Point_3(w*p.x(), w*p.y(), w*p.z());
 }
 
@@ -246,17 +242,17 @@ inline Point_3 operator+(const Point_3& p1, const Point_3& p2){
     return Point_3(p1.x()+p2.x(), p1.y()+p2.y(), p1.z()+p2.z());
 }
 
-Point_3 get_center_of_load(const std::vector<double>& weights, const std::vector<Point_3>& elements);
+Point_3 get_center_of_load(const std::vector<Real>& weights, const std::vector<Point_3>& elements);
 
-double compute_normalized_load(double my_load, double unit);
+Real compute_normalized_load(Real my_load, Real unit);
 
 inline Vector_3 get_direction(const Point_3& vertex, const Point_3& center_of_load) {
     return (vertex - center_of_load)/std::sqrt(CGAL::squared_distance(vertex, center_of_load));
 }
 
-Vector_3 get_vertex_force(const Point_3& vertex, const std::vector<Point_3>& centers_of_load, const std::vector<double>& normalized_loads);
+Vector_3 get_vertex_force(const Point_3& vertex, const std::vector<Point_3>& centers_of_load, const std::vector<Real>& normalized_loads);
 
-bool lb_isGeometryValid(const std::array<Point_3, 8>& vertices, const std::array<Plane_3, 12>& planes, const double grid_size);
+bool lb_isGeometryValid(const std::array<Point_3, 8>& vertices, const std::array<Plane_3, 12>& planes, const Real grid_size);
 
 template<class InputIterator>
 std::vector<Point_3> get_points(InputIterator beg, InputIterator end){

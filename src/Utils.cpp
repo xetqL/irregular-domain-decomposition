@@ -75,12 +75,12 @@ std::pair<int, std::vector<double>> get_neighbors_load(double my_load, int vid, 
     return std::make_pair(vid, loads);
 }
 
-std::set<int> filter_active_neighbors(const std::array<int, 8>& vertices_id,
-                                      const LinearHashMap<int, int, 8>& vertices_trial,
+std::set<int> filter_active_neighbors(const std::array<type::VertexIndex, 8>& vertices_id,
+                                      const LinearHashMap<type::VertexIndex, int, 8>&       vertices_trial,
                                       const std::map<int, Communicator>& vertex_neighborhood) {
     std::set<int> active_neighbors;
     for(int vid : vertices_id) {
-        const int vertex_trial = (*search_in_linear_hashmap<int, int, 8>(vertices_trial, vid)).second;
+        const int vertex_trial = (*search_in_linear_hashmap<type::VertexIndex, int, 8>(vertices_trial, vid)).second;
         if(vertex_trial > 0) {
             auto active_ranks = vertex_neighborhood.at(vid).get_ranks();
             active_neighbors.insert(active_ranks.begin(), active_ranks.end());

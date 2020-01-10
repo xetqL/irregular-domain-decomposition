@@ -19,12 +19,13 @@ add_executable(adlbirreg
         Cell.cpp
         GeometricUtils.cpp
         Communicator.cpp Utils.cpp DiffusiveOptimizer.cpp zupply.cpp CLIParser.cpp
+        Types.cpp
         ../include/generate.hpp
         ../include/ljpotential.hpp
         ../include/physics.hpp
         ../include/spatial_elements.hpp
         ../include/initial_conditions.hpp
-)
+        )
 
 add_executable(test_communcation comm.cpp Communicator.cpp)
 
@@ -38,6 +39,7 @@ target_compile_definitions(adlbirreg PRIVATE CGAL_DISABLE_ROUNDING_MATH_CHECK=ON
 
 IF(CMAKE_BUILD_TYPE MATCHES Debug)
     message("Debug on")
+    add_definitions("-Wall -Wpedantic")
     target_compile_definitions(adlbirreg PUBLIC DEBUG=True)
 ELSE()
     message("Optimization activated: -O3")

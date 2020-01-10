@@ -95,7 +95,7 @@ struct Domain {
                                       const Point_3& p5,const Point_3& p6,const Point_3& p7,const Point_3& p8){
         const double proc_per_row = std::cbrt(nb_partitions);
         const int    row_size     = (int) proc_per_row;
-        const double p_m1         = ((proc_per_row - 1) / proc_per_row);
+        //const double p_m1         = ((proc_per_row - 1) / proc_per_row);
 
         Transformation translate_right(  CGAL::TRANSLATION, Vector_3(std::abs(p1.x() - p2.x()) / proc_per_row, 0, 0));
         Transformation translate_fullleft(  CGAL::TRANSLATION, Vector_3(-(p2.x()-p1.x()), 0, 0));
@@ -119,7 +119,6 @@ struct Domain {
                  translate_forward(translate_up(p1)),
                  translate_forward(translate_up(translate_right(p1)))};
 
-        int id = 0;
         for(int i = 0; i < row_size; ++i) {
             for(int j = 0; j < row_size; ++j) {
                 for(int k = 0; k < row_size; ++k) {

@@ -13,45 +13,76 @@
 #include "Utils.hpp"
 #include "GeometricUtils.hpp"
 #include "Communicator.hpp"
+#include "Types.hpp"
 
 namespace elements {
 
-    using ElementRealType = float;
+    using ElementRealType = type::Real;
     using Point3D = lb::Point_3;
     //using Box3D = boost::geometry::model::box<Point3D>;
 
     template<int N>
     struct Element {
-        int gid;
-        int lid;
+        template<bool UseDoublePrecision = std::is_same<ElementRealType, double>::value>
+        static CommunicationDatatype register_datatype() {
+            MPI_Datatype element_datatype,
+                    vec_datatype,
+                    oldtype_range[1],
+                    oldtype_element[1];
+
+            MPI_Aint offset[1];
+
+            int blockcount_element[1], blockcount_range[1];
+
+            // register particle element type
+            int array_size = N;
+            auto mpi_raw_datatype = UseDoublePrecision ? MPI_DOUBLE : MPI_FLOAT;
+
+            MPI_Type_contiguous(array_size, mpi_raw_datatype, &vec_datatype);
+
+            MPI_Type_commit(&vec_datatype);
+
+            blockcount_element[0] = 2; //position, velocity
+
+            oldtype_element[0] = vec_datatype;
+
+            //MPI_Type_extent(MPI_INT, &intex);
+            offset[0] = static_cast<MPI_Aint>(0);
+
+            //MPI_Type_struct(1, blockcount_element, offset, oldtype_element, &element_datatype);
+            MPI_Type_create_struct(1, blockcount_element, offset, oldtype_element, &element_datatype);
+            MPI_Type_commit(&element_datatype);
+
+            blockcount_range[0] = N;
+            oldtype_range[0] = mpi_raw_datatype;
+
+            return {element_datatype, vec_datatype};
+        }
+
         std::array<ElementRealType, N> position, velocity;
 
         static const int number_of_dimensions = N;
 
-        constexpr Element(std::array<ElementRealType, N> p, std::array<ElementRealType, N> v, const int gid, const int lid) : gid(gid), lid(lid), position(p), velocity(v){
-            //std::fill(acceleration.begin(), acceleration.end(), 0.0);
-        }
+        constexpr Element(std::array<ElementRealType, N> p, std::array<ElementRealType, N> v) :
+            position(p),
+            velocity(v) {}
 
-        constexpr Element(std::array<ElementRealType, N> p, std::array<ElementRealType, N> v, std::array<ElementRealType,N> a, const int gid, const int lid) : gid(gid), lid(lid), position(p), velocity(v){
-            //std::fill(acceleration.begin(), acceleration.end(), 0.0);
-        }
+        constexpr Element(const std::array<ElementRealType, N>& p, const std::array<ElementRealType, N>& v, std::array<ElementRealType,N> a) :
+            position(p.cbegin(), p.cend()),
+            velocity(v.cbegin(), v.cend()) {}
 
-        constexpr Element() : gid(0), lid(0), position(), velocity() {
-            //std::fill(velocity.begin(), velocity.end(), 0.0);
-            //std::fill(position.begin(), position.end(), 0.0);
-            //std::fill(acceleration.begin(), acceleration.end(), 0.0);
-        }
+        constexpr Element() = default;
 
         /**
          * Total size of the structure
          * @return The number of element per dimension times the number of characteristics (3)
          */
         static constexpr int size() {
-            return N * 3;
+            return N * 2;
         }
 
         static constexpr int byte_size() {
-            return N * 3 * sizeof(ElementRealType) + 2 * sizeof(int);
+            return N * 2 * sizeof(ElementRealType);
         }
 
         static Element<N> create(std::array<ElementRealType, N> &p, std::array<ElementRealType, N> &v, int gid, int lid){
@@ -133,7 +164,7 @@ namespace elements {
          * @return true if the position and the velocity of the two elements are equals
          */
         bool operator==(const Element &rhs) const {
-            return position == rhs.position && velocity == rhs.velocity && gid == rhs.gid;
+            return position == rhs.position;
         }
 
         bool operator!=(const Element &rhs) const {
@@ -316,51 +347,6 @@ namespace elements {
             elements[i].velocity[1] = ndist(gen);
             if (N == 3) elements[i].velocity[2] = ndist(gen);
         }
-    }
-
-    template<int N, bool UseDoublePrecision = std::is_same<ElementRealType, double>::value>
-    CommunicationDatatype register_datatype() {
-        MPI_Datatype element_datatype,
-                vec_datatype,
-                range_datatype,
-                domain_datatype,
-                oldtype_range[1],
-                oldtype_element[2];
-
-        MPI_Aint offset[2], intex;
-
-        int blockcount_element[2], blockcount_range[1];
-
-        // register particle element type
-        int array_size = N;
-        auto mpi_raw_datatype = UseDoublePrecision ? MPI_DOUBLE : MPI_FLOAT;
-
-        MPI_Type_contiguous(array_size, mpi_raw_datatype, &vec_datatype);
-
-        MPI_Type_commit(&vec_datatype);
-
-        blockcount_element[0] = 2; //gid, lid
-        blockcount_element[1] = 3; //position, velocity, acceleration
-
-        oldtype_element[0] = MPI_INT;
-        oldtype_element[1] = vec_datatype;
-
-        MPI_Type_extent(MPI_INT, &intex);
-        offset[0] = static_cast<MPI_Aint>(0);
-        offset[1] = 2 * intex;
-
-        MPI_Type_struct(2, blockcount_element, offset, oldtype_element, &element_datatype);
-        MPI_Type_commit(&element_datatype);
-
-        blockcount_range[0] = N;
-        oldtype_range[0] = mpi_raw_datatype;
-        MPI_Type_struct(1, blockcount_range, offset, oldtype_range, &range_datatype);
-        MPI_Type_commit(&range_datatype);
-
-        MPI_Type_contiguous(N, range_datatype, &domain_datatype);
-        MPI_Type_commit(&domain_datatype);
-
-        return {element_datatype, vec_datatype};
     }
 }
 

@@ -7,25 +7,40 @@
 
 #include <GeometricUtils.hpp>
 #include <Communicator.hpp>
+#include "Types.hpp"
+
 namespace mesh {
     enum TCellType {REAL_CELL = 1, EMPTY_CELL=2, GHOST_CELL=3};
 
 template<class ContainedElement>
 struct Cell {
-    using IndexType = long long int;
+    using IndexType = type::DataIndex;
+    using value_type= ContainedElement;
+    using Real      = type::Real;
     std::vector<ContainedElement> elements;
-
     IndexType gid, lid;
-
     TCellType type;
 
+private:
     Cell() : gid(0), lid(0), type(TCellType::REAL_CELL) {};
+
+public:
+
+    Cell(TCellType type) : gid(0), lid(0), type(type) {};
+
+    Cell(IndexType gid, lb::Box3 bbox) : gid(gid), type(TCellType::REAL_CELL) {
+        update_lid(bbox);
+    };
 
     Cell(IndexType gid, TCellType type) : gid(gid), lid(0), type(type) {};
 
     Cell(IndexType gid, lb::Box3 bbox, TCellType type) : gid(gid), type(type) {
         update_lid(bbox);
     };
+
+    inline size_t get_number_of_elements(){
+        return elements.size();
+    }
 
     static Cell get_empty_cell(lb::Box3 bbox, IndexType lid){
         Cell c;
@@ -58,29 +73,16 @@ struct Cell {
 //        return std::make_tuple(x, y, z);
 //    }
 
-    std::tuple<double, double, double> get_center() const {
+    std::tuple<Real, Real, Real> get_center() const {
         IndexType x, y, z;
         lb::linear_to_grid(gid, Cell::get_msx(), Cell::get_msy(), x, y, z); //cell_to_global_position(Cell::get_msx(), Cell::get_msy(), gid);
         return std::make_tuple(x*Cell::get_cell_size()+Cell::get_cell_size()/2.0, y*Cell::get_cell_size()+Cell::get_cell_size()/2.0, z*Cell::get_cell_size()+Cell::get_cell_size()/2.0);
     }
 
-    static CommunicationDatatype register_datatype() {
-
-        MPI_Datatype cell_datatype, gid_type_datatype;
-
-        MPI_Aint intex, lb, floatex;
-
-        const int number_of_int_elements    = 1;
-
-        int blockcount_element[1];
-
-        blockcount_element[0] = number_of_int_elements;    // gid, lid, exit, waiting_time
-
-        //int
-        MPI_Type_contiguous(number_of_int_elements, MPI_INT, &gid_type_datatype);
-        MPI_Type_commit(&gid_type_datatype);
-
-        return {gid_type_datatype, gid_type_datatype};
+    lb::Point_3 get_center_point() const {
+        IndexType x, y, z;
+        lb::linear_to_grid(gid, Cell::get_msx(), Cell::get_msy(), x, y, z); //cell_to_global_position(Cell::get_msx(), Cell::get_msy(), gid);
+        return {x*Cell::get_cell_size()+Cell::get_cell_size()/2.0, y*Cell::get_cell_size()+Cell::get_cell_size()/2.0, z*Cell::get_cell_size()+Cell::get_cell_size()/2.0};
     }
 
     void add(ContainedElement e){
@@ -102,8 +104,8 @@ struct Cell {
         return msz;
     }
 
-    static double& get_cell_size(){
-        static double size;
+    static Real& get_cell_size(){
+        static Real size;
         return size;
     }
 
@@ -116,7 +118,7 @@ struct Cell {
     }
 
     friend std::ostream &operator<<(std::ostream &os, const Cell &cell) {
-        double x,y,z;
+        Real x,y,z;
         std::tie(x,y,z) = cell.get_center();
         os << "gid: " << cell.gid << " ("<<x<<";"<<y<<";"<<z <<") type: " << cell.type;
         return os;
@@ -133,5 +135,6 @@ void insert_in_proper_cell(std::vector<Cell<T>>* cells, T&& element) {
 
 }
 
+type::DataIndex compute_lid(type::DataIndex msx, type::DataIndex msy, type::DataIndex msz, type::DataIndex gid, lb::Box3 bbox);
 }
 #endif //ADLBIRREG_CELL_HPP

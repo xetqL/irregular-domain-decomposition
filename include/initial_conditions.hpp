@@ -186,9 +186,9 @@ public:
             statistic::UniformSphericalDistribution<N, elements::ElementRealType>
                     sphere_dist_position(sphere_dist_var, cluster_centerx, cluster_centery, cluster_centerz);
 
-            int trial = 0;
+            unsigned int trial = 0;
             while(trial < max_trial && part_in_cluster < clusters[cluster_id] && elements->size() < n) { // stop when you cant generate new particles with less than 10000 trials within a cluster
-                auto element = elements::Element<N>(sphere_dist_position(my_gen), sphere_dist_velocity(my_gen), elements->size(), elements->size());
+                auto element = elements::Element<N>(sphere_dist_position(my_gen), sphere_dist_velocity(my_gen));
                 if(condition->predicate(element)) {
                     trial = 0;
                     element.velocity = cluster_velocity;
@@ -222,7 +222,6 @@ public:
 
     void generate_elements(std::vector<elements::Element<N>>* elements, const int n,
                            const std::shared_ptr<lennard_jones::RejectionCondition<N>> condition) override {
-        int number_of_element_generated = 0;
         std::normal_distribution<elements::ElementRealType> temp_dist(0.0, condition->T0 * condition->T0);
         std::uniform_real_distribution<elements::ElementRealType> udistx(condition->xmin, condition->xmax),
                 udisty(condition->ymin, condition->ymax),
@@ -240,7 +239,7 @@ public:
                 else
                     element_position = {udistx(my_gen), udisty(my_gen)};
 
-                auto element = elements::Element<N>(element_position, sphere_dist_velocity(my_gen), elements->size(), elements->size());
+                auto element = elements::Element<N>(element_position, sphere_dist_velocity(my_gen));
                 if(condition->predicate(element)) {
                     trial = 0;
                     std::generate(element.velocity.begin(), element.velocity.end(), [&temp_dist, &my_gen]{return temp_dist(my_gen);});
@@ -296,7 +295,7 @@ public:
                 else
                     element_position = {udistx(my_gen), udisty(my_gen)};
 
-                auto element = elements::Element<N>(element_position, element_velocity, elements->size(), elements->size());
+                auto element = elements::Element<N>(element_position, element_velocity);
                 if(condition->predicate(element)) {
                     trial = 0;
                     elements->push_back(element);
@@ -344,7 +343,7 @@ public:
                 } else {
                     element_position = {pw_pos, udisty(my_gen)};
                 }
-                auto element = elements::Element<N>(element_position, element_velocity, elements->size(), elements->size());
+                auto element = elements::Element<N>(element_position, element_velocity);
                 if(condition->predicate(element)) {
                     trial = 0;
                     //std::generate(element.velocity.begin(), element.velocity.end(), [&temp_dist, &my_gen]{return temp_dist(my_gen);});

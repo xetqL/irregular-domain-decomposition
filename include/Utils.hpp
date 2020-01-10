@@ -14,6 +14,7 @@
 #include <set>
 #include <random>
 #include "GeometricUtils.hpp"
+#include "Types.hpp"
 
 std::vector<std::string> split(const std::string& s, char delimiter);
 bool file_exists(const std::string fileName);
@@ -95,8 +96,8 @@ search_in_linear_hashmap(const std::array<std::pair<K, V>, N> &linmap, K key) {
     }
     return entry;
 }
-std::set<int> filter_active_neighbors(const std::array<int, 8>& vertices_id,
-                                      const LinearHashMap<int, int, 8>& vertices_trial,
+std::set<int> filter_active_neighbors(const std::array<type::VertexIndex, 8>& vertices_id,
+                                      const LinearHashMap<type::VertexIndex, int, 8>& vertices_trial,
                                       const std::map<int, Communicator>& vertex_neighborhood);
 /**
  * To compute the local average load use local communicator, otherwise use MPI_COMM_WORLD
@@ -104,14 +105,14 @@ std::set<int> filter_active_neighbors(const std::array<int, 8>& vertices_id,
  * @param average_load
  * @param neighborhood
  */
-inline void compute_average_load(const double my_load, double *average_load, MPI_Comm neighborhood) {
+inline void compute_average_load(const type::Real my_load, type::Real *average_load, MPI_Comm neighborhood) {
     int N;
     MPI_Comm_size(neighborhood, &N);
     MPI_Allreduce(&my_load, average_load, 1, MPI_DOUBLE, MPI_SUM, neighborhood);
     *average_load /= N;
 }
 
-inline std::vector<double> get_neighbors_load(double my_load, MPI_Comm neighborhood) {
+inline std::vector<double> get_neighbors_load(type::Real my_load, MPI_Comm neighborhood) {
     int N;
     MPI_Comm_size(MPI_COMM_WORLD, &N);
     std::vector<double> all_loads(N);
@@ -119,7 +120,7 @@ inline std::vector<double> get_neighbors_load(double my_load, MPI_Comm neighborh
     return all_loads;
 }
 
-std::pair<int, std::vector<double>> get_neighbors_load(double my_load, int vid, const Communicator &v_comm);
+std::pair<int, std::vector<double>> get_neighbors_load(type::Real my_load, int vid, const Communicator &v_comm);
 
 LinearHashMap<int, std::vector<double>, 8>
 get_neighbors_load(double my_load, const std::set<int> &neighbors, const std::map<int, Communicator> &v_neighborhood);

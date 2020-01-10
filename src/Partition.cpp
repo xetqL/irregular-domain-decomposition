@@ -5,8 +5,8 @@
 #include "Partition.hpp"
 namespace lb {
 
-double compute_mu(double grid_size, double max_normalized_load){
-    double sigma_max = max_normalized_load-1;
+Real compute_mu(Real grid_size, Real max_normalized_load){
+    Real sigma_max = max_normalized_load-1;
     return sigma_max == 0 ? 0 : grid_size/(sigma_max);
 }
 
@@ -34,15 +34,15 @@ int translate_iteration_to_vertex_group(int physical_iteration, lb::Point_3 coor
     return com;
 }
 
-Partition::LoadStatistics Partition::get_neighborhood_load_statistics(int com, double my_load, int count){
+Partition::LoadStatistics Partition::get_neighborhood_load_statistics(int com, Real my_load, int count){
     int vid = this->vertices_id[com];
     Communicator communicator = this->vertex_neighborhood[vid];
 
     unsigned int N = communicator.comm_size;
-    std::vector<double> all_loads(N);
+    std::vector<Real> all_loads(N);
     std::vector<int> buf(N);
 
-    communicator.Allgather(&my_load, 1, MPI_DOUBLE, all_loads.data(), 1, MPI_DOUBLE, 87650);
+    communicator.Allgather(&my_load, 1, MPI_TYPE_REAL, all_loads.data(), 1, MPI_TYPE_REAL, 87650);
     communicator.Allgather(&count,   1, MPI_INT,    buf.data(),       1, MPI_INT,    87651);
 
     auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / N;

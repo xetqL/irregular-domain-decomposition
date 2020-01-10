@@ -23,7 +23,6 @@
  *   SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  ***************************************************************************/
-
 // Unless you are very confident, don't set either OS flag
 #if defined(ZUPPLY_OS_UNIX) && defined(ZUPPLY_OS_WINDOWS)
 #error Both Unix and Windows flags are set, which is not allowed!

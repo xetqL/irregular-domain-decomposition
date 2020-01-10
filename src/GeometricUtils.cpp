@@ -97,7 +97,6 @@ bool lb_isGeometryValid(const std::array<Point_3, 8>& vertices, const std::array
     /* Tetrahedral subvolumes in the domain must be positively oriented */
     /* Self-intersecting cubes are bad, very bad*/
     /* Test all four permutations of how the cube can be split into tetrahedrons*/
-    double v;
     if (lb_getTetraederVolumeIndexed(0, 5, 4, 7, vertices) <= 0) return false;
     if (lb_getTetraederVolumeIndexed(0, 3, 1, 7, vertices) <= 0) return false;
     if (lb_getTetraederVolumeIndexed(0, 1, 5, 7, vertices) <= 0) return false;
