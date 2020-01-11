@@ -132,8 +132,6 @@ public:
         return closest_planes;
     }
 
-
-
     template<class CartesianPointTransformer, class A>
     std::vector<std::pair<std::vector<Plane_3>, int> > get_ghosts_and_destination_planes(const std::vector<A>& elements) {
         CartesianPointTransformer c;
@@ -284,11 +282,12 @@ public:
     template <class LoadComputer, class A>
     bool compute_vertex_movement(Real avg_load, Real mu, const Point_3& v, const VertexIndex vid, const std::vector<mesh::Cell<A>>& elements, size_t com, const int MAX_TRIAL = 3){
 
-        Communicator communicator = this->vertex_neighborhood[com];
+        Communicator communicator = this->vertex_neighborhood[vid];
         int are_all_valid = false;
         if(communicator.comm_size > 1) {
 
             LoadComputer lc;
+
             std::vector<Point_3> points;
 
             Real my_load = lc.compute_load(elements);
@@ -310,6 +309,8 @@ public:
 #endif
             std::vector<Real> normalized_loads;
             std::transform(loads.cbegin(), loads.cend(), std::back_inserter(normalized_loads), [&avg_load](auto n){return n/avg_load;});
+
+            std::cout << "LOADS: " << loads.size() << std::endl;
             auto f1  = -get_vertex_force(v, cls.second, normalized_loads);
             auto f1_after = constraint_force(d, v, f1);
 #ifdef DEBUG
@@ -648,8 +649,8 @@ public:
 #endif
                 MPI_Isend(sdata.data(), sdata.size(), datatype.element_datatype, dest_rank, 101010, MPI_COMM_WORLD, &srequests[2*nid]);
                 MPI_Isend(gids.data(),   gids.size(), MPI_TYPE_DATA_INDEX,       dest_rank, 101011, MPI_COMM_WORLD, &srequests[2*nid+1]);
-
             }
+
 
             std::vector<A> data_buf;
             std::vector<DataIndex > gids_buf;
@@ -700,7 +701,7 @@ public:
         return neighbor_ghosts;
     }
 
-    template<class A>
+    /*template<class A>
     void move_data(std::vector<mesh::Cell<A>>& elements) {
         get_MPI_rank(my_rank);
         get_MPI_worldsize(worldsize);
@@ -710,10 +711,13 @@ public:
         std::iota(active_neighbors.begin(), active_neighbors.end(), 0);
 
         std::vector<std::pair<ProcRank, std::vector<mesh::Cell<A>>>>  migration_and_destination(number_of_neighbors);
-        std::vector<std::pair<ProcRank, std::vector<DataIndex>>> neighbor_ghosts(number_of_neighbors);
+        std::vector<std::pair<ProcRank, std::vector<DataIndex>>>      gid_and_destination(number_of_neighbors);
+        std::vector<std::pair<ProcRank, std::vector<DataIndex>>>      neighbor_ghosts(number_of_neighbors);
 
         std::transform(active_neighbors.begin(), active_neighbors.end(), migration_and_destination.begin(),
                        [](ProcRank i){ return std::make_pair(i, std::vector<mesh::Cell<A>>()); });
+        std::transform(active_neighbors.begin(), active_neighbors.end(), gid_and_destination.begin(),
+                       [](ProcRank i){ return std::make_pair(i, std::vector<DataIndex>()); });
         std::transform(active_neighbors.begin(), active_neighbors.end(), neighbor_ghosts.begin(),
                        [](ProcRank i){ return std::make_pair(i, std::vector<DataIndex>()); });
 
@@ -749,10 +753,7 @@ public:
                 if(neighbor_rank < 0 || neighbor_rank == my_rank) continue;
                 const auto& neighborhood_domains = neighborhoods[nid];
                 if(neighborhood_domains.contains(point)) {
-#ifdef DEBUG
-                    std::cout << "Transferring " << point << " to " << neighbor_rank << std::endl;
-#endif
-                    migration_and_destination[nid].second.push_back(elements[data_id]);
+                    migration_and_destination[nid].second.push_back(std::move(elements[data_id]));
                     std::iter_swap(elements.begin() + data_id, elements.end() - 1);
                     elements.pop_back();
                     nb_migrate++;
@@ -817,7 +818,7 @@ public:
             MPI_Waitall(number_of_neighbors, srequests.data(), MPI_STATUSES_IGNORE);
         }
     }
-
+    */
     template<class NumericalType>
     const NumericalType get_vertex_id(const Point_3& v, int N) const {
         auto vertices_per_row = (NumericalType) std::cbrt(N)+1;
@@ -828,14 +829,14 @@ public:
     void init_communicators(int world_size) {
         int N = world_size;
         get_MPI_rank(my_rank);
-        std::array<int, 8>  sbuff;
-        std::vector<int> buff(8*N);
-        std::map<int, std::set<int>> neighbors;
+        std::array<VertexIndex, 8>  sbuff;
+        std::vector<VertexIndex> buff(8*N);
+        std::map<int, std::set<ProcRank >> neighbors;
 
         std::copy(vertices_id.begin(), vertices_id.end(), sbuff.begin());
         std::sort(sbuff.begin(), sbuff.end());
 
-        MPI_Allgather(sbuff.data(), 8, MPI_INT, buff.data(), 8, MPI_INT, MPI_COMM_WORLD);
+        MPI_Allgather(sbuff.data(), 8, MPI_TYPE_VERTEX_INDEX, buff.data(), 8, MPI_TYPE_VERTEX_INDEX, MPI_COMM_WORLD);
         for(int j = 0; j < 8; ++j) {
             int vid = vertices_id[j];
             for(int i = 0; i < N; ++i) {
@@ -847,7 +848,7 @@ public:
                 }
             }
             neighbors[vid].insert(my_rank);
-            std::vector<int> n_list(neighbors[vid].begin(), neighbors[vid].end());
+            std::vector<ProcRank> n_list(neighbors[vid].begin(), neighbors[vid].end());
             Communicator c(n_list);
             vertex_neighborhood[vid] = c;
         }

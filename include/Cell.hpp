@@ -126,15 +126,25 @@ public:
 
 };
 
-template<class T>
-void insert_in_proper_cell(std::vector<Cell<T>>* cells, T&& element) {
-#ifdef DEBUG
-    auto dim = std::cbrt(cells->size());
-    assert(dim == (int) dim); //dim is a perfect cubical root required for searching in linear 3D-array
-#endif
+type::DataIndex compute_lid(type::DataIndex msx, type::DataIndex msy, type::DataIndex msz, type::DataIndex gid, lb::Box3 bbox);
 
+template<class T>
+void insert_or_remove(std::vector<Cell<T>>* _cells, std::vector<T>* _elements, lb::Box3 bbox) {
+    std::vector<Cell<T>>& cells = *_cells;
+    std::vector<T>& elements    = *_elements;
+    for(T el : elements){
+        auto gid = lb::position_to_cell(el.position[0], el.position[1], el.position[2], mesh::Cell<T>::get_cell_size(),
+                                    mesh::Cell<T>::get_msx(), mesh::Cell<T>::get_msy());
+        type::DataIndex lid = mesh::compute_lid(mesh::Cell<T>::get_msx(), mesh::Cell<T>::get_msy(),
+                                     mesh::Cell<T>::get_msz(), gid, bbox);
+        if (lid < bbox.get_number_of_cells()){
+            //std::cout << el << std::endl;
+            cells[lid].elements.push_back(el);
+        }
+    }
+    _elements->clear();
 }
 
-type::DataIndex compute_lid(type::DataIndex msx, type::DataIndex msy, type::DataIndex msz, type::DataIndex gid, lb::Box3 bbox);
+
 }
 #endif //ADLBIRREG_CELL_HPP

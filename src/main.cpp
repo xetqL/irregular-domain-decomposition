@@ -210,26 +210,28 @@ int main(int argc, char** argv) {
 
     my_cells = generate_lattice_single_type(msx, msy, msz, x_proc_idx, y_proc_idx, z_proc_idx, cell_in_my_cols, cell_in_my_rows, cell_in_my_depth, mesh::TCellType::REAL_CELL);
 
-    if(!rank){
-        std::vector<Particle> particles;
-        auto rejection_condition = std::make_shared<initial_condition::lennard_jones::RejectionCondition<DIMENSION>>(
-                &particles, params.sig_lj, 6.25 * params.sig_lj * params.sig_lj, params.T0, 0, 0, 0,
-                params.simsize_x, params.simsize_y, params.simsize_z
-        );
-        auto elements_generators = init_generator(rejection_condition, 1, &params);
-        int cfg_idx = 0;
-        while (!elements_generators.empty()) {
-            std::cout << "Starting generation of particles with configuration ("
-                      << cfg_idx<<"/"<<elements_generators.size()<<") ..." <<std::endl;
-            auto el_gen = elements_generators.front();
-            el_gen.first->generate_elements(&particles, el_gen.second, rejection_condition);
-            elements_generators.pop();
-            std::cout << el_gen.second <<"/"<< params.npart << " particles generated." << std::endl;
-            cfg_idx++;
-        }
+
+    std::vector<Particle> particles;
+    auto rejection_condition = std::make_shared<initial_condition::lennard_jones::RejectionCondition<DIMENSION>>(
+            &particles, params.sig_lj, 6.25 * params.sig_lj * params.sig_lj, params.T0, 0, 0, 0,
+            params.simsize_x, params.simsize_y, params.simsize_z
+    );
+    auto elements_generators = init_generator(rejection_condition, 1, &params);
+    int cfg_idx = 0;
+    while (!elements_generators.empty()) {
+        std::cout << "Starting generation of particles with configuration ("
+                  << cfg_idx<<"/"<<elements_generators.size()<<") ..." <<std::endl;
+        auto el_gen = elements_generators.front();
+        el_gen.first->generate_elements(&particles, el_gen.second, rejection_condition);
+        elements_generators.pop();
+        std::cout << el_gen.second <<"/"<< params.npart << " particles generated." << std::endl;
+        cfg_idx++;
     }
 
-    part.move_data<Particle>(my_cells);
+    lb::Box3 bbox(part.vertices, Cell::get_cell_size());
+    mesh::insert_or_remove(&my_cells, &particles, bbox);
+
+    //part.move_data<Particle>(my_cells);
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
