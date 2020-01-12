@@ -52,7 +52,7 @@ namespace lb {
 
 struct GridElementComputer {
     double compute_load(const std::vector<Cell>& elements){
-        return std::accumulate(elements.cbegin(), elements.cend(), 0.0, [](double l, Cell e){return l + 1.0;});
+        return std::accumulate(elements.cbegin(), elements.cend(), 0.0, [](double l, const Cell& e){return l + e.elements.size();});
     }
 
     std::vector<double> get_weights(const std::vector<Cell>& elements) {
@@ -203,13 +203,14 @@ int main(int argc, char** argv) {
     //auto nb_cells_y = (long long int) (DOMAIN_SIZE_Y / (double) procs_y / d.grid_cell_size);
     //auto nb_cells_z = (long long int) (DOMAIN_SIZE_Z / (double) procs_z / d.grid_cell_size);
 
+
     long long int x_proc_idx, y_proc_idx, z_proc_idx;
+
     lb::linear_to_grid((long long int) my_rank, procs_x, procs_y, x_proc_idx, y_proc_idx, z_proc_idx);
 
     std::vector<Cell> my_cells; my_cells.reserve(cell_per_process);
 
     my_cells = generate_lattice_single_type(msx, msy, msz, x_proc_idx, y_proc_idx, z_proc_idx, cell_in_my_cols, cell_in_my_rows, cell_in_my_depth, mesh::TCellType::REAL_CELL);
-
 
     std::vector<Particle> particles;
     auto rejection_condition = std::make_shared<initial_condition::lennard_jones::RejectionCondition<DIMENSION>>(
@@ -229,6 +230,10 @@ int main(int argc, char** argv) {
     }
 
     lb::Box3 bbox(part.vertices, Cell::get_cell_size());
+    std::cout << bbox << std::endl;
+    for(auto& cell : my_cells){
+        cell.update_lid(bbox);
+    }
     mesh::insert_or_remove(&my_cells, &particles, bbox);
 
     //part.move_data<Particle>(my_cells);

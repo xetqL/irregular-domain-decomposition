@@ -8,6 +8,7 @@
 #include <GeometricUtils.hpp>
 #include <Communicator.hpp>
 #include "Types.hpp"
+#include "spatial_elements.hpp"
 
 namespace mesh {
     enum TCellType {REAL_CELL = 1, EMPTY_CELL=2, GHOST_CELL=3};
@@ -128,21 +129,20 @@ public:
 
 type::DataIndex compute_lid(type::DataIndex msx, type::DataIndex msy, type::DataIndex msz, type::DataIndex gid, lb::Box3 bbox);
 
+
 template<class T>
 void insert_or_remove(std::vector<Cell<T>>* _cells, std::vector<T>* _elements, lb::Box3 bbox) {
     std::vector<Cell<T>>& cells = *_cells;
-    std::vector<T>& elements    = *_elements;
-    for(T el : elements){
-        auto gid = lb::position_to_cell(el.position[0], el.position[1], el.position[2], mesh::Cell<T>::get_cell_size(),
-                                    mesh::Cell<T>::get_msx(), mesh::Cell<T>::get_msy());
-        type::DataIndex lid = mesh::compute_lid(mesh::Cell<T>::get_msx(), mesh::Cell<T>::get_msy(),
-                                     mesh::Cell<T>::get_msz(), gid, bbox);
-        if (lid < bbox.get_number_of_cells()){
-            //std::cout << el << std::endl;
-            cells[lid].elements.push_back(el);
+    std::vector<T>& elements = *_elements;
+    for(T& el : elements) {
+        if(bbox.contains(el.position[0], el.position[1], el.position[2])){
+            auto gid = lb::position_to_cell(el.position[0], el.position[1], el.position[2], mesh::Cell<T>::get_cell_size(),
+                                        mesh::Cell<T>::get_msx(), mesh::Cell<T>::get_msy());
+            type::DataIndex lid = mesh::compute_lid(mesh::Cell<T>::get_msx(), mesh::Cell<T>::get_msy(), mesh::Cell<T>::get_msz(), gid, bbox);
+            cells.at(lid).elements.push_back(el);
         }
     }
-    _elements->clear();
+    elements.clear();
 }
 
 

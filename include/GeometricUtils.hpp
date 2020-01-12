@@ -50,8 +50,8 @@ struct Box3 {
     Box3 (const std::array<Point_3, 8>& vertices, Real step) : step(step) {
         for(const Point_3& p : vertices) {
             if(p.x() < xmin) xmin = p.x();
-            if(p.y() < xmin) ymin = p.y();
-            if(p.z() < xmin) zmin = p.z();
+            if(p.y() < ymin) ymin = p.y();
+            if(p.z() < zmin) zmin = p.z();
             if(p.x() > xmax) xmax = p.x();
             if(p.y() > ymax) ymax = p.y();
             if(p.z() > zmax) zmax = p.z();
@@ -83,13 +83,20 @@ struct Box3 {
     }
 
     friend std::ostream &operator<<(std::ostream &os, const Box3 &box3) {
-        os << "xmin: " << box3.xmin << " ymin: " << box3.ymin << " zmin: " << box3.zmin << " xmax: " << box3.xmax
-           << " ymax: " << box3.ymax << " zmax: " << box3.zmax;
+        os << "xmin: " << box3.xmin << " xmax: " << box3.xmax << " ymin: " << box3.ymin << " ymax: " << box3.ymax
+           << " zmin: " << box3.zmin << " zmax: " << box3.zmax << " step: " << box3.step << " x_idx_min: "
+           << box3.x_idx_min << " y_idx_min: " << box3.y_idx_min << " z_idx_min: " << box3.z_idx_min << " x_idx_max: "
+           << box3.x_idx_max << " y_idx_max: " << box3.y_idx_max << " z_idx_max: " << box3.z_idx_max << " size_x: "
+           << box3.size_x << " size_y: " << box3.size_y << " size_z: " << box3.size_z;
         return os;
     }
 
     DataIndex get_number_of_cells() {
         return (x_idx_max - x_idx_min) * (y_idx_max - y_idx_min) * (z_idx_max - z_idx_min);
+    }
+
+    bool contains(Real x, Real y, Real z) {
+        return (xmin <= x && x <= xmax) && (ymin <= y && y <= ymax) && (zmin <= z && z <= zmax);
     }
 };
 

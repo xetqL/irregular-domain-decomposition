@@ -182,12 +182,7 @@ namespace elements {
                 vel += " " + std::to_string(element.velocity.at(i));
             }
 
-            std::string acc = std::to_string(element.acceleration.at(0));
-            for(int i = 1; i < N; i++){
-                acc += " " + std::to_string(element.acceleration.at(i));
-            }
-
-            os << pos << ";" << vel << ";" << acc << ";" << element.gid << ";" << element.lid;
+            os << pos << ";" << vel;
             return os;
         }
 
