@@ -22,4 +22,5 @@ namespace type
     using VertexIndex = unsigned int;
     extern MPI_Datatype MPI_TYPE_VERTEX_INDEX;
 }
+
 #endif //ADLBIRREG_TYPES_HPP

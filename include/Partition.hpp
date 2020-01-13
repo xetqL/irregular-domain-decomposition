@@ -13,7 +13,7 @@
 #include "Cell.hpp"
 #include "spatial_elements.hpp"
 #include "Types.hpp"
-
+#include "zupply.hpp"
 namespace lb {
 
 using namespace type;
@@ -241,7 +241,7 @@ public:
     template<class LoadComputer, class A>
     LoadStatistics get_load_statistics(const std::vector<A>& elements, MPI_Comm neighborhood = MPI_COMM_WORLD){
         LoadComputer lc;
-        int count = std::accumulate(elements.cbegin(), elements.cend(), 0, [](int acc, auto& cell){return acc + cell.elements.size();});
+        int count = std::accumulate(elements.cbegin(), elements.cend(), 0, [](int acc, auto& cell){return acc + cell.number_of_elements();});
         int buf;
         Real my_load = lc.compute_load(elements);
         int N; MPI_Comm_size(neighborhood, &N);
@@ -310,6 +310,7 @@ public:
             std::cout << my_rank << " tries to move vertex " << vid << " with comm_size "<< communicator.comm_size << std::endl;
 #endif
             std::vector<Real> normalized_loads;
+
             std::transform(loads.cbegin(), loads.cend(), std::back_inserter(normalized_loads), [&avg_load](auto n){return n/avg_load;});
 
             std::cout << "LOADS: " << loads.size() << std::endl;
@@ -645,8 +646,8 @@ public:
                 std::vector<A> sdata;sdata.reserve(nb_elements);
                 for(size_t i = 0; i < array_size; ++i) {
                     sdata.insert(sdata.begin(),
-                                 std::make_move_iterator(scells[i].elements.begin()),
-                                 std::make_move_iterator(scells[i].elements.end()));
+                                 std::make_move_iterator(scells[i].begin()),
+                                 std::make_move_iterator(scells[i].end()));
                 }
 #ifdef DEBUG
                 assert(migration_and_destination[nid].second.size() == 0 || dest_rank != my_rank);
@@ -670,33 +671,57 @@ public:
                 MPI_Recv(gids_buf.data(), count, MPI_TYPE_DATA_INDEX, dest_rank, 101011, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
                 // create cell to hold elements
-                for(DataIndex gid : gids_buf){
-//TODO: FIX SEGMENTATION FAULT HERE, lid > new_elements.size()
+                for(DataIndex gid : gids_buf) {
+// TODO: FIX SEGMENTATION FAULT HERE, lid > new_elements.size()
                     auto lid = mesh::compute_lid(mesh::Cell<A>::get_msx(), mesh::Cell<A>::get_msy(), mesh::Cell<A>::get_msz(), gid, bbox);
-                    if(lid > new_elements.size()) throw std::runtime_error("lid > size()");
+                    if(lid >= new_elements.size()) {
+                        Cell c(gid, bbox);
+                        std::cout << "X: " << mesh::Cell<A>::get_msx() << std::endl;
+                        std::cout << "Y: " << mesh::Cell<A>::get_msy() << std::endl;
+                        std::cout << "Z: " << mesh::Cell<A>::get_msz() << std::endl;
+                        std::cout << "CellSize: " << mesh::Cell<A>::get_cell_size() << std::endl;
+                        std::cout << c << std::endl;
+                        std::for_each(vertices.cbegin(), vertices.cend(), [](auto v){ std::cout << v << std::endl; });
+                        std::cout << lid << ">" << new_elements.size() << std::endl;
+                        throw std::runtime_error("lid > size()");
+                    }
                     new_elements.emplace(new_elements.begin() + lid, gid, bbox, mesh::REAL_CELL);
-
                 }
-
             }
+
             for(int nid = 0; nid < number_of_neighbors; ++nid) {
                 int dest_rank = migration_and_destination[nid].first;
                 MPI_Probe(dest_rank, 101010, MPI_COMM_WORLD, &status);
+
                 MPI_Get_count(&status, MPI_TYPE_DATA_INDEX, &count);
+
                 data_buf.resize(count);
+
                 MPI_Recv(data_buf.data(), count, datatype.element_datatype, dest_rank, 101010, MPI_COMM_WORLD,
                          MPI_STATUS_IGNORE);
+
                 recv_load += count;
-                A &el = data_buf[0];
-
-
 
                 for(A &el : data_buf) {
-                    auto gid = position_to_cell(el.position[0],el.position[1],el.position[2], mesh::Cell<A>::get_cell_size(), mesh::Cell<A>::get_msx(),
-                                                mesh::Cell<A>::get_msy());
-                    auto lid = mesh::compute_lid(mesh::Cell<A>::get_msx(), mesh::Cell<A>::get_msy(),
-                                                 mesh::Cell<A>::get_msz(), gid, bbox);
-                    new_elements[lid].elements.push_back(std::move(el));
+                    auto indexes = position_to_index(el.position[0],el.position[1],el.position[2], mesh::Cell<A>::get_cell_size());
+
+                    DataIndex ix = std::get<0>(indexes), iy = std::get<1>(indexes),iz = std::get<2>(indexes);
+
+                    auto lid = (ix - bbox.xmin) + bbox.size_x * (iy - bbox.ymin) + bbox.size_y * bbox.size_x * (iz - bbox.zmin);
+
+                    try{
+                        new_elements.at(lid).add(std::move(el));
+                    } catch (const std::out_of_range& oor) {
+                        auto logger = zz::log::get_logger("default", true);
+                        logger->info("PUTE!");
+                        logger->attach_sink(zz::log::new_simple_file_sink("simple"+std::to_string(my_rank)+".log" , false));
+                        logger->info() << lid << " >= " << new_elements.size();
+                        logger->info() << el;
+                        std::for_each(vertices.cbegin(), vertices.cend(), [&](auto v){ logger->info() << v; });
+                        logger->info() << bbox;
+                        throw;
+                    }
+
                 }
             }
 

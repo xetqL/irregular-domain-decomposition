@@ -8,7 +8,6 @@
 #include <GeometricUtils.hpp>
 #include <Communicator.hpp>
 #include "Types.hpp"
-#include "spatial_elements.hpp"
 
 namespace mesh {
     enum TCellType {REAL_CELL = 1, EMPTY_CELL=2, GHOST_CELL=3};
@@ -18,13 +17,13 @@ struct Cell {
     using IndexType = type::DataIndex;
     using value_type= ContainedElement;
     using Real      = type::Real;
-    std::vector<ContainedElement> elements;
+
     IndexType gid, lid;
     TCellType type;
 
 private:
     Cell() : gid(0), lid(0), type(TCellType::REAL_CELL) {};
-
+    std::vector<ContainedElement> elements;
 public:
 
     Cell(TCellType type) : gid(0), lid(0), type(type) {};
@@ -62,6 +61,7 @@ public:
         lid  = lb::grid_index_to_cell(x, y, z, bbox.size_x, bbox.size_y, bbox.size_z);
     }
 
+
 //    template<class NumericType>
 //    std::array<NumericType, 3> get_position_as_array() const {
 //        auto position_as_pair = lb::cell_to_global_position(Cell::get_msx(), Cell::get_msy(), gid);
@@ -86,8 +86,26 @@ public:
         return {x*Cell::get_cell_size()+Cell::get_cell_size()/2.0, y*Cell::get_cell_size()+Cell::get_cell_size()/2.0, z*Cell::get_cell_size()+Cell::get_cell_size()/2.0};
     }
 
-    void add(ContainedElement e){
+    std::tuple<Real, Real, Real> get_coordinates() const {
+        IndexType x, y, z;
+        lb::linear_to_grid(gid, Cell<ContainedElement>::get_msx(), Cell<ContainedElement>::get_msy(), x, y, z); //cell_to_global_position(Cell::get_msx(), Cell::get_msy(), gid);
+        return std::make_tuple(x*Cell<ContainedElement>::get_cell_size(), y*Cell<ContainedElement>::get_cell_size(), z*Cell<ContainedElement>::get_cell_size());
+    }
+
+    void add(ContainedElement e) {
         elements.push_back(e);
+    }
+
+    size_t number_of_elements() const {
+        return elements.size();
+    }
+
+    typename std::vector<ContainedElement>::iterator begin(){
+        return elements.begin();
+    }
+
+    typename std::vector<ContainedElement>::iterator end(){
+        return elements.end();
     }
 
     static IndexType& get_msx(){
@@ -119,10 +137,20 @@ public:
     }
 
     friend std::ostream &operator<<(std::ostream &os, const Cell &cell) {
-        Real x,y,z;
-        std::tie(x,y,z) = cell.get_center();
-        os << "gid: " << cell.gid << " ("<<x<<";"<<y<<";"<<z <<") type: " << cell.type;
+        Real x,y,z, cx, cy,cz;
+        std::tie(cx,cy,cz) = cell.get_center();
+        std::tie(x,y,z)    = cell.get_coordinates();
+        os << "gid: " << cell.gid << " CENTER("<<cx<<";"<<cy<<";"<<cz <<")" << " COORD("<<x<<";"<<y<<";"<<z <<")" << " type: " << cell.type;
         return os;
+    }
+
+    lb::Box3 as_box(){
+        Real x, y, z;
+        std::tie(x, y, z) = get_coordinates();
+        return {x, x+Cell<ContainedElement>::get_cell_size(),
+                y, y+Cell<ContainedElement>::get_cell_size(),
+                z, z+Cell<ContainedElement>::get_cell_size(),
+                     Cell<ContainedElement>::get_cell_size()};
     }
 
 };
@@ -135,11 +163,13 @@ void insert_or_remove(std::vector<Cell<T>>* _cells, std::vector<T>* _elements, l
     std::vector<Cell<T>>& cells = *_cells;
     std::vector<T>& elements = *_elements;
     for(T& el : elements) {
-        if(bbox.contains(el.position[0], el.position[1], el.position[2])){
+        if(bbox.contains(el.position[0], el.position[1], el.position[2])) {
             auto gid = lb::position_to_cell(el.position[0], el.position[1], el.position[2], mesh::Cell<T>::get_cell_size(),
                                         mesh::Cell<T>::get_msx(), mesh::Cell<T>::get_msy());
             type::DataIndex lid = mesh::compute_lid(mesh::Cell<T>::get_msx(), mesh::Cell<T>::get_msy(), mesh::Cell<T>::get_msz(), gid, bbox);
-            cells.at(lid).elements.push_back(el);
+            lb::Box3 b = cells.at(lid).as_box();
+            if(b.contains(el.position[0], el.position[1], el.position[2]))
+                cells.at(lid).add(el);
         }
     }
     elements.clear();

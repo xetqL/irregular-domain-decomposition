@@ -12,13 +12,16 @@ include(${CGAL_USE_FILE})
 include_directories(SYSTEM ${MPI_INCLUDE_PATH})
 
 add_executable(TestLinearHashMapUtils TestLinearHashMapUtils.cpp ../src/Utils.cpp ../src/Communicator.cpp ../src/GeometricUtils.cpp)
+add_executable(TestLocalIDComputation TestLocalIDComputation.cpp ../src/Utils.cpp ../src/Communicator.cpp ../src/GeometricUtils.cpp ../src/Cell.cpp)
 
 add_test(TestLinearHashMapUtils "${PROJECT_SOURCE_DIR}/test/TestLinearHashMapUtils")
 
+add_test(TestLocalIDComputation "${PROJECT_SOURCE_DIR}/test/TestLocalIDComputation")
+
+target_link_libraries(TestLocalIDComputation gtest_main)
+target_link_libraries(TestLocalIDComputation ${CGAL_LIBS})
+target_link_libraries(TestLocalIDComputation ${MPI_C_LIBRARIES})
+
 target_link_libraries(TestLinearHashMapUtils gtest_main)
-
 target_link_libraries(TestLinearHashMapUtils ${CGAL_LIBS})
-
 target_link_libraries(TestLinearHashMapUtils ${MPI_C_LIBRARIES})
-
-

@@ -22,8 +22,6 @@
 
 #define GID_TAG 120120120
 
-
-
 inline short get_type_size(MPI_Datatype type) {
     if(type == MPI_INT)       return sizeof(int);
     if(type == MPI_DOUBLE)    return sizeof(double);

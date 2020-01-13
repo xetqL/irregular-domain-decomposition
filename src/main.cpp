@@ -52,7 +52,7 @@ namespace lb {
 
 struct GridElementComputer {
     double compute_load(const std::vector<Cell>& elements){
-        return std::accumulate(elements.cbegin(), elements.cend(), 0.0, [](double l, const Cell& e){return l + e.elements.size();});
+        return std::accumulate(elements.cbegin(), elements.cend(), 1.0, [](double l, const Cell& e){return l + e.number_of_elements();});
     }
 
     std::vector<double> get_weights(const std::vector<Cell>& elements) {
@@ -128,9 +128,6 @@ std::pair<int, int> cell_to_global_position(int msx, int msy, long long position
 }
 
 int main(int argc, char** argv) {
-
-
-
     int rank;
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
@@ -204,9 +201,9 @@ int main(int argc, char** argv) {
     //auto nb_cells_z = (long long int) (DOMAIN_SIZE_Z / (double) procs_z / d.grid_cell_size);
 
 
-    long long int x_proc_idx, y_proc_idx, z_proc_idx;
+    type::DataIndex x_proc_idx, y_proc_idx, z_proc_idx;
 
-    lb::linear_to_grid((long long int) my_rank, procs_x, procs_y, x_proc_idx, y_proc_idx, z_proc_idx);
+    lb::linear_to_grid(my_rank, procs_x, procs_y, x_proc_idx, y_proc_idx, z_proc_idx);
 
     std::vector<Cell> my_cells; my_cells.reserve(cell_per_process);
 

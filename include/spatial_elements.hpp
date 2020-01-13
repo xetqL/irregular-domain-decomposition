@@ -8,7 +8,6 @@
 #include <array>
 #include <iostream>
 #include <algorithm>
-#include <mpi.h>
 #include <type_traits>
 #include "Utils.hpp"
 #include "GeometricUtils.hpp"

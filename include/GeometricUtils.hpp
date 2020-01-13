@@ -27,11 +27,8 @@ const double sqrt_3 = std::sqrt(3);
 
 struct Box3 {
     Real xmin=std::numeric_limits<Real>::max(),xmax=std::numeric_limits<Real>::min(),
-           ymin=std::numeric_limits<Real>::max(),ymax=std::numeric_limits<Real>::min(),
-           zmin=std::numeric_limits<Real>::max(), zmax=std::numeric_limits<Real>::min();
-
-
-
+         ymin=std::numeric_limits<Real>::max(),ymax=std::numeric_limits<Real>::min(),
+         zmin=std::numeric_limits<Real>::max(),zmax=std::numeric_limits<Real>::min();
 
     Real step;
 
@@ -44,8 +41,6 @@ struct Box3 {
               size_x,
               size_y,
               size_z;
-
-
 
     Box3 (const std::array<Point_3, 8>& vertices, Real step) : step(step) {
         for(const Point_3& p : vertices) {
@@ -92,7 +87,7 @@ struct Box3 {
     }
 
     DataIndex get_number_of_cells() {
-        return (x_idx_max - x_idx_min) * (y_idx_max - y_idx_min) * (z_idx_max - z_idx_min);
+        return (x_idx_max - x_idx_min + 1) * (y_idx_max - y_idx_min + 1) * (z_idx_max - z_idx_min + 1);
     }
 
     bool contains(Real x, Real y, Real z) {
@@ -135,13 +130,12 @@ inline void cell_to_local_position(DataIndex msx, DataIndex msy, DataIndex msz, 
     *z_idx = gidz - minz;
 }
 
-template<class A>
-inline void linear_to_grid(const A index, const A c, const A r, A& x_idx, A& y_idx, A& z_idx){
-    x_idx = (A) (index % c);           // col
-    y_idx = (A) std::floor(index % (c*r) / c); // row
-    z_idx = (A) std::floor(index / (c*r));     // depth
-    assert(x_idx < c);
-    assert(y_idx < r);
+inline void linear_to_grid(const DataIndex index, const DataIndex c, const DataIndex r, DataIndex& x_idx, DataIndex& y_idx, DataIndex& z_idx){
+    x_idx = (DataIndex) (index % c);                    // col
+    y_idx = (DataIndex) std::floor(index % (c*r) / c);  // row
+    z_idx = (DataIndex) std::floor(index / (c*r));      // depth
+    if(x_idx >= c) throw std::runtime_error("GROS ENCULEUR1");
+    if(y_idx >= r) throw std::runtime_error("GROS_ENCULEUR2");
 }
 
 template<class NumericalType>
@@ -159,19 +153,23 @@ inline NumericalType position_to_cell(Point_3 const& position, const Real step, 
     return idx;
 }
 
-template<class NumericalType, class IndexType>
-inline int position_to_cell(IndexType x, IndexType y, IndexType z, const Real step, const NumericalType column, const NumericalType row,
-                            const NumericalType col_shift  = 0.0,
-                            const NumericalType row_shift  = 0.0,
-                            const NumericalType depth_shift= 0.0) {
-    const std::vector<NumericalType> weight = {1, column, column*row};
-    NumericalType idx = 0;
-
-    idx += (NumericalType) std::floor(x / step);
-    idx += column * (NumericalType) std::floor(y / step);
-    idx += column * row * (NumericalType) std::floor(z / step);
-
+template<class IndexType>
+inline IndexType position_to_cell(Real x, Real y, Real z, const Real step, const IndexType column, const IndexType row,
+                            const Real col_shift  = 0.0, const Real row_shift  = 0.0, const Real depth_shift= 0.0) {
+    const std::vector<IndexType> weight = {1, column, column*row};
+    IndexType idx = 0;
+    idx += (IndexType) std::floor(x / step);
+    idx += column * (IndexType) std::floor(y / step);
+    idx += column * row * (IndexType) std::floor(z / step);
     return idx;
+}
+
+inline std::tuple<DataIndex, DataIndex, DataIndex> position_to_index(const Real x, const Real y, const Real z, const Real step) {
+    DataIndex ix, iy, iz;
+    ix = (DataIndex) std::floor(x / step);
+    iy = (DataIndex) std::floor(y / step);
+    iz = (DataIndex) std::floor(z / step);
+    return {ix, iy, iz};
 }
 
 template<class IndexType>
