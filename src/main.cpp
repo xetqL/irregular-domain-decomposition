@@ -148,9 +148,6 @@ int main(int argc, char** argv) {
     const int DOMAIN_SIZE_X = params.simsize_x;
     const int DOMAIN_SIZE_Y = params.simsize_y;
     const int DOMAIN_SIZE_Z = params.simsize_z;
-
-    lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z);
-
     long long int procs_x = params.xprocs,
                   procs_y = params.yprocs,
                   procs_z = params.zprocs;
@@ -161,10 +158,9 @@ int main(int argc, char** argv) {
                        cell_per_process = params.cell_per_process,
                        MAX_ITER = params.MAX_STEP;
 
-    assert(procs_x * procs_y * procs_z == world_size);
     const int cell_in_my_rows  = (int) std::cbrt(cell_per_process),
-              cell_in_my_cols  = cell_in_my_rows,
-              cell_in_my_depth = cell_in_my_rows;
+            cell_in_my_cols  = cell_in_my_rows,
+            cell_in_my_depth = cell_in_my_rows;
 
     const int xcells = cell_in_my_rows  * xprocs,
               ycells = cell_in_my_cols  * yprocs,
@@ -179,6 +175,8 @@ int main(int argc, char** argv) {
     auto& msz = Cell::get_msz();
 
     Cell::get_cell_size() = (double) DOMAIN_SIZE_X / (double) xcells;
+
+    lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z, &Cell::get_cell_size());
 
     if(!rank) {
         std::cout << "Cell number (X,Y,Z) = (" << msx<<","<<msy<<","<<msz<<")"<< std::endl;
@@ -239,7 +237,7 @@ int main(int argc, char** argv) {
 
     auto stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
 
-    if(!my_rank) print_load_statitics(stats);
+    if(!my_rank) lb::print_load_statitics(stats);
 
     double mu = 1.0;
 
@@ -289,6 +287,7 @@ int main(int argc, char** argv) {
         int &pcall = com_pcall[com],
             &ncall = com_ncall[com];
         const Communicator& communicator = part.vertex_neighborhood[vid];
+
         double workload = 0,
                virtual_time = 0,
                &degradation_since_last_lb = com_degradation[com];
@@ -311,7 +310,7 @@ int main(int argc, char** argv) {
         SlidingWindow<double>& avg_iteration_time_window = com_avg_iteration_time_window[com];
         auto avg_lb_cost = std::accumulate(C.begin(), C.end(), 0.0) / C.size();
         lb_decision = degradation_since_last_lb >= avg_lb_cost;
-        std::cout << my_rank << " >> "<< j << "; com = "<< com << " " << (lb_decision ? "True" : "False") << std::endl;
+        // std::cout << my_rank << " >> "<< j << "; com = "<< com << " " << (lb_decision ? "True" : "False") << std::endl;
 
         if(true) {
 
@@ -327,7 +326,7 @@ int main(int argc, char** argv) {
 
             C.push_back(lb_time);
             auto avg_lb_cost = std::accumulate(C.begin(), C.end(), 0.0) / C.size();
-            std::cout << avg_lb_cost << std::endl;
+            //std::cout << avg_lb_cost << std::endl;
             double slope = max_iteration_time_window.data_container.back() - max_iteration_time_window.data_container.front(); //get_slope<double>(iteration_time_window.data_container)
             int tau = (int) std::sqrt(2.0 * avg_lb_cost / slope);
             if(tau < 0)  tau = 40;
@@ -344,6 +343,8 @@ int main(int argc, char** argv) {
             lb_call++;
             virtual_time += lb_time;
         }
+        auto stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
+        if(!my_rank) print_load_statitics(stats);
 
         degradation_since_last_lb +=
                 median<double>(max_iteration_time_window.end()-std::min(3, (int) max_iteration_time_window.size()), max_iteration_time_window.end()) -

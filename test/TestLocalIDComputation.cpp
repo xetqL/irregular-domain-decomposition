@@ -33,17 +33,11 @@ TEST(CellLocalID, Computation) {
 
     lb::Box3 bbox(vertices, Cell::get_cell_size());
 
-    //std::cout << "Bounding box is "<< bbox << std::endl;
-
     Cell cell(gid, bbox);
     auto cbox = cell.as_box();
-    //std::cout << "Target cell is " << cell << std::endl;
-
     type::DataIndex x,y,z;
 
     lb::cell_to_local_position(Cell::get_msx(), Cell::get_msy(), Cell::get_msz(), bbox, gid, &x, &y, &z);
-
-    //std::cerr << "Cell local coordinates ("<<x<<","<<y<<","<<z<<")"<<std::endl;
 
     auto lid = mesh::compute_lid(Cell::get_msx(), Cell::get_msy(), Cell::get_msz(), gid, bbox);
 

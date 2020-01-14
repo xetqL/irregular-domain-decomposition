@@ -8,6 +8,7 @@
 #include <GeometricUtils.hpp>
 #include <Communicator.hpp>
 #include "Types.hpp"
+#include <zupply.hpp>
 
 namespace mesh {
     enum TCellType {REAL_CELL = 1, EMPTY_CELL=2, GHOST_CELL=3};
@@ -20,7 +21,6 @@ struct Cell {
 
     IndexType gid, lid;
     TCellType type;
-
 private:
     Cell() : gid(0), lid(0), type(TCellType::REAL_CELL) {};
     std::vector<ContainedElement> elements;
@@ -60,19 +60,6 @@ public:
         lb::cell_to_local_position(Cell::get_msx(), Cell::get_msy(), Cell::get_msz(), bbox, gid, &x, &y, &z);
         lid  = lb::grid_index_to_cell(x, y, z, bbox.size_x, bbox.size_y, bbox.size_z);
     }
-
-
-//    template<class NumericType>
-//    std::array<NumericType, 3> get_position_as_array() const {
-//        auto position_as_pair = lb::cell_to_global_position(Cell::get_msx(), Cell::get_msy(), gid);
-//        std::array<NumericType, 2> array = {(NumericType) position_as_pair.first, (NumericType) position_as_pair.second};
-//        return array;
-//    }
-//    std::tuple<int, int, int>  get_position_as_pair()  const {
-//        int x,y,z;
-//        lb::linear_to_grid(gid, Cell::get_msx(), Cell::get_msy(), x, y, z); //cell_to_global_position(Cell::get_msx(), Cell::get_msy(), gid);
-//        return std::make_tuple(x, y, z);
-//    }
 
     std::tuple<Real, Real, Real> get_center() const {
         IndexType x, y, z;
@@ -164,12 +151,12 @@ void insert_or_remove(std::vector<Cell<T>>* _cells, std::vector<T>* _elements, l
     std::vector<T>& elements = *_elements;
     for(T& el : elements) {
         if(bbox.contains(el.position[0], el.position[1], el.position[2])) {
-            auto gid = lb::position_to_cell(el.position[0], el.position[1], el.position[2], mesh::Cell<T>::get_cell_size(),
-                                        mesh::Cell<T>::get_msx(), mesh::Cell<T>::get_msy());
-            type::DataIndex lid = mesh::compute_lid(mesh::Cell<T>::get_msx(), mesh::Cell<T>::get_msy(), mesh::Cell<T>::get_msz(), gid, bbox);
+            //migrate the data
+            auto indexes = lb::position_to_index(el.position[0],el.position[1],el.position[2], mesh::Cell<T>::get_cell_size());
+            type::DataIndex ix = std::get<0>(indexes), iy = std::get<1>(indexes), iz = std::get<2>(indexes);
+            type::DataIndex lid = (ix - bbox.x_idx_min) + bbox.size_x * (iy - bbox.y_idx_min) + bbox.size_y * bbox.size_x * (iz - bbox.z_idx_min);
             lb::Box3 b = cells.at(lid).as_box();
-            if(b.contains(el.position[0], el.position[1], el.position[2]))
-                cells.at(lid).add(el);
+            cells.at(lid).add(el);
         }
     }
     elements.clear();

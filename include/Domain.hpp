@@ -10,63 +10,15 @@
 namespace lb{
 
 struct Domain {
-    double grid_cell_size = 1.0;
-
-    const double get_grid_cell_size() const {
-        return grid_cell_size;
-    }
 
     Point_3 v1, v2, v3, v4, v5, v6, v7, v8;
-
-    inline const double xmin() const {
-        return v1.x();
-    }
-
-    inline const double ymin() const {
-        return v1.y();
-    }
-
-    inline const double zmin() const {
-        return v1.z();
-    }
-
-    inline const double xmax() const {
-        return v8.x();
-    }
-
-    inline const double ymax() const {
-        return v8.y();
-    }
-
-    inline const double zmax() const {
-        return v8.z();
-    }
-
-    inline const Box3 get_box() const {
-        return {xmin(), xmax(), ymin(), ymax(), zmin(), zmax(), grid_cell_size};
-    }
-
-    inline const double xsize() const {
-        return xmax()-xmin();
-    }
-
-    inline const double ysize() const {
-        return ymax()-ymin();
-    }
-
-    inline const double zsize() const {
-        return zmax()-zmin();
-    }
+    const type::Real* grid_cell_size;
 
     std::vector<Partition> partitions;
+    int num_part = 0;
 
-    Partition& get_my_partition(int rank);
-
-    explicit Domain (std::vector<Partition>& partitions): partitions(partitions) {}
-
-    int num_part;
-
-    Domain (const int x, const int y, const int z):
+    //explicit Domain (std::vector<Partition>& partitions): partitions(partitions) {}
+    Domain (const int x, const int y, const int z, const type::Real* cell_size):
             v1(0, 0, 0),
             v2(x, 0, 0),
             v3(0, y, 0),
@@ -74,14 +26,61 @@ struct Domain {
             v5(0, 0, z),
             v6(x, 0, z),
             v7(0, y, z),
-            v8(x, y, z)
+            v8(x, y, z),
+            grid_cell_size(cell_size)
     {}
 
-    Domain (const Point_3& p1,const Point_3& p2,const Point_3& p3,const Point_3& p4,
+    /*Domain (const Point_3& p1,const Point_3& p2,const Point_3& p3,const Point_3& p4,
             const Point_3& p5,const Point_3& p6,const Point_3& p7,const Point_3& p8):
             v1(p1),v2(p2),v3(p3),v4(p4),
             v5(p5),v6(p6),v7(p7),v8(p8) {
+    }*/
+
+    const type::Real get_grid_cell_size() const {
+        return *grid_cell_size;
     }
+
+    inline const type::Real xmin() const {
+        return v1.x();
+    }
+
+    inline const type::Real ymin() const {
+        return v1.y();
+    }
+
+    inline const type::Real zmin() const {
+        return v1.z();
+    }
+
+    inline const type::Real xmax() const {
+        return v8.x();
+    }
+
+    inline const type::Real ymax() const {
+        return v8.y();
+    }
+
+    inline const type::Real zmax() const {
+        return v8.z();
+    }
+
+    inline const type::Real xsize() const {
+        return xmax()-xmin();
+    }
+
+    inline const type::Real ysize() const {
+        return ymax()-ymin();
+    }
+
+    inline const type::Real zsize() const {
+        return zmax()-zmin();
+    }
+
+    inline const Box3 get_bounding_box() const {
+        return {xmin(), xmax(), ymin(), ymax(), zmin(), zmax(), *grid_cell_size};
+    }
+
+    Partition& get_my_partition(int rank);
 
     void bootstrap_partitions(unsigned int nb_partitions) {
         num_part = nb_partitions;
@@ -93,9 +92,9 @@ struct Domain {
      */
     void bootstrap_partitions_cubical(unsigned int nb_partitions, const Point_3& p1,const Point_3& p2,const Point_3& p3,const Point_3& p4,
                                       const Point_3& p5,const Point_3& p6,const Point_3& p7,const Point_3& p8){
-        const double proc_per_row = std::cbrt(nb_partitions);
+        const type::Real proc_per_row = std::cbrt(nb_partitions);
         const int    row_size     = (int) proc_per_row;
-        //const double p_m1         = ((proc_per_row - 1) / proc_per_row);
+        //const type::Real p_m1         = ((proc_per_row - 1) / proc_per_row);
 
         Transformation translate_right(  CGAL::TRANSLATION, Vector_3(std::abs(p1.x() - p2.x()) / proc_per_row, 0, 0));
         Transformation translate_fullleft(  CGAL::TRANSLATION, Vector_3(-(p2.x()-p1.x()), 0, 0));
@@ -122,7 +121,7 @@ struct Domain {
         for(int i = 0; i < row_size; ++i) {
             for(int j = 0; j < row_size; ++j) {
                 for(int k = 0; k < row_size; ++k) {
-                    partitions.emplace_back(Point_3(k ,j, i), get_box(), grid_cell_size,
+                    partitions.emplace_back(Point_3(k ,j, i), get_bounding_box(), grid_cell_size,
                                             partition_vertices[0], partition_vertices[1],
                                             partition_vertices[2], partition_vertices[3],
                                             partition_vertices[4], partition_vertices[5],
@@ -142,5 +141,6 @@ struct Domain {
     }
 
 };
+
 }
 #endif //ADLBIRREG_DOMAIN_HPP

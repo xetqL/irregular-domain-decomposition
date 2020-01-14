@@ -10,19 +10,7 @@
 
 namespace lb
 {
-inline void print_load_statitics(Partition::LoadStatistics stats){
-    lb::Partition::ElementCount count;
-    lb::Partition::Load max_load, avg_load;
-    lb::Partition::Imbalance load_imbalance, my_imbalance;
-    std::tie(count, max_load, avg_load, load_imbalance, my_imbalance) = stats;
-    std::cout << "===============================================\n"
-              << "Total number of elements: " << count             << "\n"
-              << "            Maximum load: " << max_load          << "\n"
-              << "            Average load: " << avg_load          << "\n"
-              << "   Global Load Imbalance: " << load_imbalance    << "\n"
-              << "       My Load Imbalance: " << my_imbalance      <<
-              "\n===============================================" << std::endl;
-}
+
 template<class A, class GridElementComputer >
 class DiffusiveOptimizer {
 

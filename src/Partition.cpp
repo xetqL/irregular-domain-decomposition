@@ -34,7 +34,7 @@ int translate_iteration_to_vertex_group(int physical_iteration, lb::Point_3 coor
     return com;
 }
 
-Partition::LoadStatistics Partition::get_neighborhood_load_statistics(int com, Real my_load, int count){
+LoadStatistics Partition::get_neighborhood_load_statistics(int com, Real my_load, int count){
     int vid = this->vertices_id[com];
     Communicator communicator = this->vertex_neighborhood[vid];
 
