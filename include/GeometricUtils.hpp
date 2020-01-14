@@ -87,7 +87,7 @@ struct Box3 {
     }
 
     DataIndex get_number_of_cells() {
-        return (x_idx_max - x_idx_min + 1) * (y_idx_max - y_idx_min + 1) * (z_idx_max - z_idx_min + 1);
+        return (x_idx_max - x_idx_min) * (y_idx_max - y_idx_min) * (z_idx_max - z_idx_min);
     }
 
     bool contains(Real x, Real y, Real z) {

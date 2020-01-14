@@ -252,14 +252,16 @@ public:
     LoadStatistics get_load_statistics(const std::vector<A>& elements, MPI_Comm neighborhood = MPI_COMM_WORLD){
         LoadComputer lc;
         int count = std::accumulate(elements.cbegin(), elements.cend(), 0, [](int acc, auto& cell){return acc + cell.number_of_elements();});
-        int buf;
+        int count_cell = std::accumulate(elements.cbegin(), elements.cend(), 0, [](int acc, auto& cell){return acc + 1;});
+        int b1, b2;
         Real my_load = lc.compute_load(elements);
         int N; MPI_Comm_size(neighborhood, &N);
         auto all_loads = ::get_neighbors_load(my_load, neighborhood); //global load balancing with MPI_COMM_WORLD
         auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / N;
         auto max_load  =*std::max_element(all_loads.cbegin(), all_loads.cend());
-        MPI_Allreduce(&count, &buf, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-        return {buf, max_load, avg_load, my_load, (max_load / avg_load) - 1.0, (my_load / avg_load) - 1.0};
+        MPI_Allreduce(&count, &b1, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+        MPI_Allreduce(&count_cell, &b2, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+        return {b2, max_load, avg_load, my_load, (max_load / avg_load) - 1.0, (my_load / avg_load) - 1.0};
     }
 
     template<class LoadComputer, class A>
@@ -275,10 +277,9 @@ public:
         std::vector<int> buf(N);
 
         communicator.Allgather(&my_load, 1, MPI_TYPE_REAL, all_loads.data(), 1, MPI_TYPE_REAL, 87650);
-        communicator.Allgather(&count,   1, MPI_INT,    buf.data(),       1, MPI_INT,    87651);
+        communicator.Allgather(&count,   1, MPI_INT,             buf.data(), 1,       MPI_INT, 87651);
 
         auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / N;
-
         auto max_load  =*std::max_element(all_loads.cbegin(), all_loads.cend());
 
         return {std::accumulate(buf.cbegin(), buf.cend(), 0),
