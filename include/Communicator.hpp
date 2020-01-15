@@ -11,6 +11,7 @@
 #include <cmath>
 #include <assert.h>
 #include <map>
+#include <numeric>
 
 #define get_MPI_rank(rank_var)\
     int rank_var;\
@@ -33,6 +34,17 @@ inline short get_type_size(MPI_Datatype type) {
 }
 
 template<class T>
+void gather_elements_on(std::vector<T>& send, int size, MPI_Datatype type, std::vector<T>& recv, int destrank, MPI_Comm comm){
+    get_MPI_worldsize(worldsize);
+    get_MPI_rank(my_rank);
+    std::vector<int> counts(worldsize, 0), displs(worldsize, 0);
+    MPI_Gather(&size, 1, MPI_INT, counts.data(), 1, MPI_INT, destrank, comm);
+    for(int cpu = 0; cpu < worldsize; cpu++)
+        displs[cpu] = cpu == 0 ? 0 : displs[cpu - 1] + counts[cpu - 1];
+    recv.resize(std::accumulate(counts.begin(), counts.end(), 0));
+    MPI_Gatherv(send.data(), size, type, recv.data(), counts.data(), displs.data(), type, destrank, comm);
+}
+template<class T>
 void gather_elements_on(T* send, int size, MPI_Datatype type, T* recv, int destrank, MPI_Comm comm){
     get_MPI_worldsize(worldsize);
     get_MPI_rank(my_rank);
@@ -40,6 +52,8 @@ void gather_elements_on(T* send, int size, MPI_Datatype type, T* recv, int destr
     MPI_Gather(&size, 1, MPI_INT, counts.data(), 1, MPI_INT, destrank, comm);
     for(int cpu = 0; cpu < worldsize; cpu++)
         displs[cpu] = cpu == 0 ? 0 : displs[cpu - 1] + counts[cpu - 1];
+
+    recv = new T[(std::accumulate(counts.begin(), counts.end(), 0))];
     MPI_Gatherv(send, size, type, recv, counts.data(), displs.data(), type, destrank, comm);
 }
 

@@ -11,7 +11,7 @@
 #include <zupply.hpp>
 
 namespace mesh {
-    enum TCellType {REAL_CELL = 1, EMPTY_CELL=2, GHOST_CELL=3};
+    enum TCellType {REAL_CELL = 1, EMPTY_CELL=2, GHOST_CELL=3, UNITIALIZED_CELL=-1};
 
 template<class ContainedElement>
 struct Cell {
@@ -22,9 +22,9 @@ struct Cell {
     IndexType gid, lid;
     TCellType type;
 private:
-    Cell() : gid(0), lid(0), type(TCellType::REAL_CELL) {};
     std::vector<ContainedElement> elements;
 public:
+    Cell() : gid(0), lid(0), type(TCellType::UNITIALIZED_CELL) {};
 
     Cell(TCellType type) : gid(0), lid(0), type(type) {};
 
@@ -59,6 +59,12 @@ public:
         IndexType x, y, z;
         lb::cell_to_local_position(Cell::get_msx(), Cell::get_msy(), Cell::get_msz(), bbox, gid, &x, &y, &z);
         lid  = lb::grid_index_to_cell(x, y, z, bbox.size_x, bbox.size_y, bbox.size_z);
+    }
+
+    IndexType get_lid(lb::Box3 bbox){
+        IndexType x, y, z;
+        lb::cell_to_local_position(Cell::get_msx(), Cell::get_msy(), Cell::get_msz(), bbox, gid, &x, &y, &z);
+        return lb::grid_index_to_cell(x, y, z, bbox.size_x, bbox.size_y, bbox.size_z);
     }
 
     std::tuple<Real, Real, Real> get_center() const {
@@ -149,19 +155,22 @@ template<class T>
 void insert_or_remove(std::vector<Cell<T>>* _cells, std::vector<T>* _elements, lb::Box3 bbox) {
     std::vector<Cell<T>>& cells = *_cells;
     std::vector<T>& elements = *_elements;
+    int nbp = 0;
     for(T& el : elements) {
         if(bbox.contains(el.position[0], el.position[1], el.position[2])) {
             //migrate the data
             auto indexes = lb::position_to_index(el.position[0],el.position[1],el.position[2], mesh::Cell<T>::get_cell_size());
             type::DataIndex ix = std::get<0>(indexes), iy = std::get<1>(indexes), iz = std::get<2>(indexes);
             type::DataIndex lid = (ix - bbox.x_idx_min) + bbox.size_x * (iy - bbox.y_idx_min) + bbox.size_y * bbox.size_x * (iz - bbox.z_idx_min);
-            lb::Box3 b = cells.at(lid).as_box();
             cells.at(lid).add(el);
+            nbp++;
         }
     }
+    std::cout << "Number of particle added: " << nbp << "/" << elements.size()<<  std::endl;
     elements.clear();
 }
 
+type::DataIndex get_lid(type::DataIndex msx, type::DataIndex msy, type::DataIndex msz, type::DataIndex gid, lb::Box3 bbox);
 
 }
 #endif //ADLBIRREG_CELL_HPP

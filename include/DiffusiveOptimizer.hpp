@@ -31,7 +31,7 @@ public:
         auto avg_load = stats.avg_load;
 
         Real delta_load = 0;
-        unsigned int remaining_trials = 3;
+        unsigned int remaining_trials = 10;
         Real mu = init_mu;
         while(remaining_trials) {
             auto data = part.move_selected_vertices<GridElementComputer, A>

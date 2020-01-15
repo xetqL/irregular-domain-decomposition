@@ -18,7 +18,7 @@ struct Domain {
     int num_part = 0;
 
     //explicit Domain (std::vector<Partition>& partitions): partitions(partitions) {}
-    Domain (const int x, const int y, const int z, const type::Real* cell_size):
+    Domain (const type::Real x, const type::Real y, const type::Real z, const type::Real* cell_size):
             v1(0, 0, 0),
             v2(x, 0, 0),
             v3(0, y, 0),

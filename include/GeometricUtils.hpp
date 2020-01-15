@@ -29,7 +29,7 @@ struct Box3 {
     Real xmin=std::numeric_limits<Real>::max(),xmax=std::numeric_limits<Real>::min(),
          ymin=std::numeric_limits<Real>::max(),ymax=std::numeric_limits<Real>::min(),
          zmin=std::numeric_limits<Real>::max(),zmax=std::numeric_limits<Real>::min();
-
+    Real simsize_x, simsize_y, simsize_z;
     Real step;
 
     DataIndex x_idx_min,
@@ -51,6 +51,9 @@ struct Box3 {
             if(p.y() > ymax) ymax = p.y();
             if(p.z() > zmax) zmax = p.z();
         }
+        simsize_x = xmax-xmin;
+        simsize_y = ymax-ymin;
+        simsize_z = zmax-zmin;
 
         x_idx_min = (xmin / step);
         y_idx_min = (ymin / step);
@@ -87,7 +90,7 @@ struct Box3 {
     }
 
     DataIndex get_number_of_cells() {
-        return (x_idx_max - x_idx_min) * (y_idx_max - y_idx_min) * (z_idx_max - z_idx_min);
+        return (x_idx_max - x_idx_min + 1) * (y_idx_max - y_idx_min + 1) * (z_idx_max - z_idx_min + 1);
     }
 
     bool contains(Real x, Real y, Real z) {

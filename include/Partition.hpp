@@ -252,7 +252,7 @@ public:
     LoadStatistics get_load_statistics(const std::vector<A>& elements, MPI_Comm neighborhood = MPI_COMM_WORLD){
         LoadComputer lc;
         int count = std::accumulate(elements.cbegin(), elements.cend(), 0, [](int acc, auto& cell){return acc + cell.number_of_elements();});
-        int count_cell = std::accumulate(elements.cbegin(), elements.cend(), 0, [](int acc, auto& cell){return acc + 1;});
+        int count_cell = std::accumulate(elements.cbegin(), elements.cend(), 0, [](int acc, auto& cell){return acc + (cell.type == mesh::REAL_CELL ? 1 : 0);});
         int b1, b2;
         Real my_load = lc.compute_load(elements);
         int N; MPI_Comm_size(neighborhood, &N);
@@ -261,7 +261,7 @@ public:
         auto max_load  =*std::max_element(all_loads.cbegin(), all_loads.cend());
         MPI_Allreduce(&count, &b1, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
         MPI_Allreduce(&count_cell, &b2, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-        return {b2, max_load, avg_load, my_load, (max_load / avg_load) - 1.0, (my_load / avg_load) - 1.0};
+        return {b1, max_load, avg_load, my_load, (max_load / avg_load) - 1.0, (my_load / avg_load) - 1.0};
     }
 
     template<class LoadComputer, class A>
@@ -612,7 +612,10 @@ public:
         /* resize to my bounding box */
         //elements.resize(bbox.get_number_of_cells(), mesh::EMPTY_CELL);
         std::vector<mesh::Cell<A>> new_elements(bbox.get_number_of_cells(), mesh::EMPTY_CELL);
-        while(data_id < elements.size()) {
+
+        int nb_to_migrate = 0, nb_to_keep = 0, nb_empty = 0;
+        auto nb_elements = elements.size();
+        while(data_id < nb_elements) {
             auto point = elements[data_id].get_center_point();
             bool is_real_cell = this->contains(point);
             elements[data_id].update_lid(bbox);
@@ -622,17 +625,25 @@ public:
                     bool found = false;
                     for (int nid = 0; nid < number_of_neighbors && !found; ++nid) {
                         const auto neighbor_rank = migration_and_destination[nid].first;
-                        if (neighbor_rank < 0 || neighbor_rank == my_rank) continue;
-                        const auto &neighborhood_domains = neighborhoods[nid];
-                        if (neighborhood_domains.contains(point)) {
-                            migration_and_destination[nid].second.push_back(std::move(elements[data_id]));
-                            found = true;
+                        if (neighbor_rank >= 0 && neighbor_rank != my_rank){
+                            const auto &neighborhood_domains = neighborhoods[nid];
+                            if (neighborhood_domains.contains(point)) {
+                                migration_and_destination[nid].second.push_back(std::move(elements[data_id]));
+                                nb_migrate++;
+                                found = true;
+                                break;
+                            }
                         }
                     }
                     if(!found) throw std::runtime_error("Real cell must belong to someone");
                 }
+                nb_empty++;
             } else { // contained by polygon but wrong local id
-                new_elements[elements[data_id].lid] = std::move(elements[data_id]); // put in the right position in the new array;
+                if(elements[data_id].type == mesh::REAL_CELL){
+                    auto lid = elements[data_id].get_lid(bbox);
+                    new_elements.at(lid) = std::move(elements[data_id]); // put in the right position in the new array;
+                    nb_to_keep++;
+                }
             }
             data_id++;
         }
@@ -661,10 +672,6 @@ public:
                     sdata.insert(sdata.begin(),
                                  std::make_move_iterator(scells[i].begin()), std::make_move_iterator(scells[i].end()));
                 }
-#ifdef DEBUG
-
-#endif
-                //std::for_each(sdata.begin(), sdata.end(), [](auto v){std::cout << v << std::endl;});
                 MPI_Isend(sdata.data(), sdata.size(), datatype.element_datatype, dest_rank, 101010, MPI_COMM_WORLD, &srequests[2*nid]);
                 MPI_Isend(gids.data(),   gids.size(), MPI_TYPE_DATA_INDEX,       dest_rank, 101011, MPI_COMM_WORLD, &srequests[2*nid+1]);
             }
@@ -686,6 +693,7 @@ public:
                 /* create cell to hold elements */
                 for(DataIndex gid : gids_buf) {
                     auto lid = mesh::compute_lid(mesh::Cell<A>::get_msx(), mesh::Cell<A>::get_msy(), mesh::Cell<A>::get_msz(), gid, bbox);
+                    assert(new_elements.at(lid).type != mesh::REAL_CELL);
                     new_elements.emplace(new_elements.begin() + lid, gid, bbox, mesh::REAL_CELL);
                 }
             }
@@ -704,10 +712,10 @@ public:
                     auto indexes = position_to_index(el.position[0],el.position[1],el.position[2], mesh::Cell<A>::get_cell_size());
                     DataIndex ix = std::get<0>(indexes), iy = std::get<1>(indexes),iz = std::get<2>(indexes);
                     DataIndex lid = (ix - bbox.x_idx_min) + bbox.size_x * (iy - bbox.y_idx_min) + bbox.size_y * bbox.size_x * (iz - bbox.z_idx_min);
+
                     new_elements.at(lid).add(std::move(el));
                 }
             }
-
 #ifdef DEBUG
             std::cout << my_rank << " received " << recv_load << std::endl;
 #endif
@@ -716,11 +724,7 @@ public:
             std::cout << my_rank << " leaves " << __func__ << std::endl;
 #endif
             *delta_load = recv_load - sent_load;
-
-            elements = std::move(new_elements);
-
-
-
+            elements = new_elements;
         }
         return neighbor_ghosts;
     }
@@ -890,8 +894,6 @@ public:
         return os;
     }
 };
-
-
 
 }
 

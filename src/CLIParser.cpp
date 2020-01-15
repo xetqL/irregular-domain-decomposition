@@ -7,7 +7,7 @@
 std::pair<SimulationParams, bool>  parse_cli(int argc, char** argv) {
     unsigned int xprocs, yprocs, zprocs;
     unsigned int cell_per_process;
-    unsigned int simsize;
+    float simsize;
     unsigned int npart;
     unsigned int MAX_STEP, interval = 100;
     int seed;
@@ -25,12 +25,12 @@ std::pair<SimulationParams, bool>  parse_cli(int argc, char** argv) {
     parser.add_opt_version('V', "version", "0.1");
     parser.add_opt_help('h', "help"); // use -h or --help
 
-    parser.add_opt_value('x', "xprocs", xprocs, (unsigned int) 0, "set the number of PE in x dimension", "INT").require(); // require this option
-    parser.add_opt_value('y', "yprocs", yprocs, (unsigned int) 0, "set the number of PE in y dimension", "INT").require(); // require this option
-    parser.add_opt_value('z', "zprocs", zprocs, (unsigned int) 0, "set the number of PE in z dimension", "INT").require(); // require this option
-    parser.add_opt_value('S', "simsize",simsize,(unsigned int) 10, "set the simulation size x,y,z", "INT");
-    parser.add_opt_value('c', "cellPerCPU", cell_per_process, (unsigned int) 0, "set the number of cell per CPU must be a perfect square", "INT").require(); // require this option
-    parser.add_opt_value('N', "overloading", N, (unsigned int) 0, "set the number of overloading CPU", "INT").require(); // require this option
+    parser.add_opt_value('x', "xprocs",  xprocs, (unsigned int) 0, "set the number of PE in x dimension", "INT").require(); // require this option
+    parser.add_opt_value('y', "yprocs",  yprocs, (unsigned int) 0, "set the number of PE in y dimension", "INT").require(); // require this option
+    parser.add_opt_value('z', "zprocs",  zprocs, (unsigned int) 0, "set the number of PE in z dimension", "INT").require(); // require this option
+    parser.add_opt_value('S', "simsize", simsize,(float) 0.01, "set the simulation size x,y,z", "INT");
+    //parser.add_opt_value('c', "cellPerCPU", cell_per_process, (unsigned int) 0, "set the number of cell per CPU must be a perfect square", "INT").require(); // require this option
+    parser.add_opt_value('N', "overloading", N, (unsigned int) 0, "set the number of overloading CPU", "INT"); // require this option
     parser.add_opt_value('n', "npart", npart, (unsigned int) 400, "set the number of particles", "INT"); // require this option
     parser.add_opt_value('i', "iterations", MAX_STEP, (unsigned int) 0,"set the number of steps", "INT").require(); // require this option
     parser.add_opt_value('r', "seed" , seed, 0, "set the random seed", "INT");
@@ -59,7 +59,7 @@ std::pair<SimulationParams, bool>  parse_cli(int argc, char** argv) {
         std::cout << parser.get_help() << std::endl;
         return std::make_pair<SimulationParams>({}, true);
     } else {
-        SimulationParams p = {xprocs, yprocs, zprocs, N, MAX_STEP, cell_per_process, interval, seed, load_lattice, verbose, lattice_fname, outputfname};
+        SimulationParams p = {xprocs, yprocs, zprocs, N, MAX_STEP, interval, seed, load_lattice, verbose, lattice_fname, outputfname};
         p.simsize_x = simsize;
         p.simsize_y = simsize;
         p.simsize_z = simsize;
