@@ -30,17 +30,12 @@ struct Box3 {
          ymin=std::numeric_limits<Real>::max(),ymax=std::numeric_limits<Real>::min(),
          zmin=std::numeric_limits<Real>::max(),zmax=std::numeric_limits<Real>::min();
     Real simsize_x, simsize_y, simsize_z;
+
     Real step;
 
-    DataIndex x_idx_min,
-              y_idx_min,
-              z_idx_min,
-              x_idx_max,
-              y_idx_max,
-              z_idx_max,
-              size_x,
-              size_y,
-              size_z;
+    DataIndex x_idx_min,x_idx_max,size_x,
+              y_idx_min,y_idx_max,size_y,
+              z_idx_min,z_idx_max,size_z;
 
     Box3 (const std::array<Point_3, 8>& vertices, Real step) : step(step) {
         for(const Point_3& p : vertices) {
@@ -51,50 +46,48 @@ struct Box3 {
             if(p.y() > ymax) ymax = p.y();
             if(p.z() > zmax) zmax = p.z();
         }
-        simsize_x = xmax-xmin;
-        simsize_y = ymax-ymin;
-        simsize_z = zmax-zmin;
-
-        x_idx_min = (xmin / step);
-        y_idx_min = (ymin / step);
-        z_idx_min = (zmin / step);
-        x_idx_max = (xmax / step);
-        y_idx_max = (ymax / step);
-        z_idx_max = (zmax / step);
-
-        size_x = x_idx_max - x_idx_min;
-        size_y = y_idx_max - y_idx_min;
-        size_z = z_idx_max - z_idx_min;
+        init();
     }
 
     Box3(Real xmin, Real xmax, Real ymin, Real ymax, Real zmin, Real zmax, Real step) :
         xmin(xmin), xmax(xmax), ymin(ymin), ymax(ymax), zmin(zmin), zmax(zmax), step(step){
-        x_idx_min = (xmin / step);
-        y_idx_min = (ymin / step);
-        z_idx_min = (zmin / step);
-        x_idx_max = (xmax / step);
-        y_idx_max = (ymax / step);
-        z_idx_max = (zmax / step);
-        size_x = x_idx_max - x_idx_min;
-        size_y = y_idx_max - y_idx_min;
-        size_z = z_idx_max - z_idx_min;
-    }
-
-    friend std::ostream &operator<<(std::ostream &os, const Box3 &box3) {
-        os << "xmin: " << box3.xmin << " xmax: " << box3.xmax << " ymin: " << box3.ymin << " ymax: " << box3.ymax
-           << " zmin: " << box3.zmin << " zmax: " << box3.zmax << " step: " << box3.step << " x_idx_min: "
-           << box3.x_idx_min << " y_idx_min: " << box3.y_idx_min << " z_idx_min: " << box3.z_idx_min << " x_idx_max: "
-           << box3.x_idx_max << " y_idx_max: " << box3.y_idx_max << " z_idx_max: " << box3.z_idx_max << " size_x: "
-           << box3.size_x << " size_y: " << box3.size_y << " size_z: " << box3.size_z;
-        return os;
+        init();
     }
 
     DataIndex get_number_of_cells() {
-        return (x_idx_max - x_idx_min + 1) * (y_idx_max - y_idx_min + 1) * (z_idx_max - z_idx_min + 1);
+        return (size_x) * (size_y) * (size_z);
     }
 
     bool contains(Real x, Real y, Real z) {
         return (xmin <= x && x <= xmax) && (ymin <= y && y <= ymax) && (zmin <= z && z <= zmax);
+    }
+
+    friend std::ostream &operator<<(std::ostream &os, const Box3 &box3) {
+        os << "xmin: " << box3.xmin << " xmax: " << box3.xmax << " ymin: " << box3.ymin << " ymax: " << box3.ymax
+           << " zmin: " << box3.zmin << " zmax: " << box3.zmax << " simsize_x: " << box3.simsize_x << " simsize_y: "
+           << box3.simsize_y << " simsize_z: " << box3.simsize_z << " step: " << box3.step << " x_idx_min: "
+           << box3.x_idx_min << " x_idx_max: " << box3.x_idx_max << " size_x: " << box3.size_x << " y_idx_min: "
+           << box3.y_idx_min << " y_idx_max: " << box3.y_idx_max << " size_y: " << box3.size_y << " z_idx_min: "
+           << box3.z_idx_min << " z_idx_max: " << box3.z_idx_max << " size_z: " << box3.size_z;
+        return os;
+    }
+
+private:
+    void init(){
+        simsize_x = xmax-xmin;
+        simsize_y = ymax-ymin;
+        simsize_z = zmax-zmin;
+
+        x_idx_min = (type::DataIndex) (xmin / step);
+        y_idx_min = (type::DataIndex) (ymin / step);
+        z_idx_min = (type::DataIndex) (zmin / step);
+        x_idx_max = (type::DataIndex) ((xmax-step/2) / step);
+        y_idx_max = (type::DataIndex) ((ymax-step/2) / step);
+        z_idx_max = (type::DataIndex) ((zmax-step/2) / step);
+
+        size_x    = (x_idx_max - x_idx_min) + 1;
+        size_y    = (y_idx_max - y_idx_min) + 1;
+        size_z    = (z_idx_max - z_idx_min) + 1;
     }
 };
 
@@ -120,17 +113,14 @@ inline std::tuple<DataIndex, DataIndex, DataIndex> cell_to_local_position(DataIn
 }
 
 inline void cell_to_local_position(DataIndex msx, DataIndex msy, DataIndex msz, Box3 bbox, DataIndex index, DataIndex* x_idx, DataIndex* y_idx, DataIndex* z_idx){
-    auto minx = bbox.x_idx_min,
-         miny = bbox.y_idx_min,
-         minz = bbox.z_idx_min;
 
     auto gidx = index % msx,
          gidy = (DataIndex) std::floor(index % (msx*msy) / msx),
          gidz = (DataIndex) std::floor(index / (msx*msy));
 
-    *x_idx = gidx - minx;
-    *y_idx = gidy - miny;
-    *z_idx = gidz - minz;
+    *x_idx = gidx - bbox.x_idx_min;
+    *y_idx = gidy - bbox.y_idx_min;
+    *z_idx = gidz - bbox.z_idx_min;
 }
 
 inline void linear_to_grid(const DataIndex index, const DataIndex c, const DataIndex r, DataIndex& x_idx, DataIndex& y_idx, DataIndex& z_idx){

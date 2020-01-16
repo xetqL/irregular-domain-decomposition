@@ -26,30 +26,6 @@ inline int bitselect(int condition, int truereturnvalue, int falsereturnvalue) {
     return (truereturnvalue & -condition) | (falsereturnvalue & ~(-condition)); //a when TRUE and b when FintLSE
 }
 
-std::vector<Cell> generate_lattice_single_type( type::DataIndex msx, type::DataIndex msy, type::DataIndex msz,
-                                                type::DataIndex x_proc_idx, type::DataIndex y_proc_idx, type::DataIndex z_proc_idx,
-                                                type::DataIndex cell_in_my_cols, type::DataIndex cell_in_my_rows, type::DataIndex cell_in_my_depth,
-                                                mesh::TCellType type) {
-
-    auto cell_per_process = cell_in_my_cols * cell_in_my_rows;
-    std::vector<Cell> my_cells; my_cells.reserve(cell_per_process);
-
-    auto x_shift = (cell_in_my_rows *  x_proc_idx);
-    auto y_shift = (cell_in_my_cols *  y_proc_idx);
-    auto z_shift = (cell_in_my_depth * z_proc_idx);
-
-    for(int z = 0; z < cell_in_my_depth; ++z) {
-        for(int y = 0; y < cell_in_my_cols; ++y) {
-            for(int x = 0; x < cell_in_my_rows; ++x) {
-                auto gid = (x_shift + x) + (y_shift + y) * msx + (z_shift + z) * msx * msy;
-                my_cells.emplace_back(gid, type);
-            }
-        }
-    }
-
-    return my_cells;
-}
-
 namespace lb {
 
 struct GridElementComputer {
@@ -76,59 +52,6 @@ struct GridPointTransformer {
 
 }
 
-void generate_lattice_rocks(const int rocks_per_stripe, int msx, int msy, int msz,
-                            std::vector<Cell>* _cells,
-                            float erosion_probability,
-                            int begin_stripe, int end_stripe){
-    using Radius   = int;
-    using XPosition= int;
-    using YPosition= int;
-
-    int rank, size;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
-
-    std::vector<Cell>& cells = *_cells;
-    std::vector<std::tuple<XPosition, YPosition, Radius>> rocks_data(rocks_per_stripe);
-
-    for (int i = 0; i < rocks_per_stripe; ++i) {
-//        rocks_data[i] = std::make_tuple((int) std::floor((i+1) * msx / (rocks_per_stripe+1)), (begin_stripe + end_stripe) * (3.0/4.0) : (begin_stripe + end_stripe) / 2, (end_stripe - begin_stripe) / 4);
-        rocks_data[i] = std::make_tuple((int) std::floor((i+1) * msx / (rocks_per_stripe+1)),
-                //rank == size-1 ? (begin_stripe + end_stripe) / 2 + (end_stripe - begin_stripe) / 4 : (begin_stripe + end_stripe) / 2, (end_stripe - begin_stripe) / 3);
-                                        (begin_stripe + end_stripe) / 2, (end_stripe - begin_stripe) / 3);
-    }
-
-    for(auto& cell : cells) {
-        int cx, cy, cr;
-        int gid = cell.gid;
-        long long int x,y,z;
-        auto pos = lb::cell_to_global_position(msx, msy, msz, gid);
-        std::tie(x,y,z) = pos;
-        for(auto& rock : rocks_data){
-            std::tie(cx, cy, cr) = rock;
-            if(std::sqrt( std::pow(cx-x, 2) + std::pow(cy - y, 2) ) < cr) {
-                cell.type  = mesh::TCellType::REAL_CELL;
-                break;
-            }
-        }
-    }
-}
-
-std::tuple<int, int, int> linear_to_grid(const long long index, const long long c, const long long r){
-    int x_idx = (int) (index % (c*r) % c);           // col
-    int y_idx = (int) std::floor(index % (c*r) / c); // row
-    int z_idx = (int) std::floor(index / (c*r));     // depth
-    assert(c==r);
-    assert(x_idx < c);
-    assert(y_idx < r);
-    assert(z_idx < r);
-    return std::make_tuple(x_idx, y_idx, z_idx);
-}
-
-std::pair<int, int> cell_to_global_position(int msx, int msy, long long position) {
-    return std::make_pair(position % msx, (int) position / msx);
-}
-
 int main(int argc, char** argv) {
     int rank;
     MPI_Init(&argc, &argv);
@@ -150,7 +73,7 @@ int main(int argc, char** argv) {
     const type::Real DOMAIN_SIZE_Y = params.simsize_y;
     const type::Real DOMAIN_SIZE_Z = params.simsize_z;
 
-    Cell::get_cell_size() = 6.25 * params.sig_lj * params.sig_lj;
+    Cell::get_cell_size() = params.simsize_x / 10.0f;//6.25 * params.sig_lj * params.sig_lj;
     Cell::get_msx()       = (type::DataIndex) (DOMAIN_SIZE_X / Cell::get_cell_size());
     Cell::get_msy()       = (type::DataIndex) (DOMAIN_SIZE_Y / Cell::get_cell_size());
     Cell::get_msz()       = (type::DataIndex) (DOMAIN_SIZE_Z / Cell::get_cell_size());
@@ -185,14 +108,14 @@ int main(int argc, char** argv) {
     part.init_communicators(world_size);
     lb::Box3 bbox(part.vertices, Cell::get_cell_size());
     std::cout << bbox << std::endl;
-
+    auto domain = d.get_bounding_box();
     type::DataIndex x_proc_idx, y_proc_idx, z_proc_idx;
     lb::linear_to_grid(my_rank, procs_x, procs_y, x_proc_idx, y_proc_idx, z_proc_idx);
 
-    std::vector<Cell> my_cells = generate_lattice_single_type(msx, msy, msz, x_proc_idx, y_proc_idx, z_proc_idx, cell_in_my_cols, cell_in_my_rows, cell_in_my_depth, mesh::TCellType::REAL_CELL);
+    std::vector<Cell> my_cells = mesh::generate_lattice_single_type<Particle>(msx, msy, msz, x_proc_idx, y_proc_idx, z_proc_idx, cell_in_my_cols, cell_in_my_rows, cell_in_my_depth, mesh::TCellType::REAL_CELL);
 
     std::vector<Particle> particles;
-    if(!rank){
+    if(!rank) {
         auto rejection_condition = std::make_shared<initial_condition::lennard_jones::RejectionCondition<DIMENSION>>(
                 &particles, params.sig_lj, 6.25 * params.sig_lj * params.sig_lj, params.T0, 0, 0, 0,
                 bbox.simsize_x, bbox.simsize_y, bbox.simsize_z
@@ -210,14 +133,13 @@ int main(int argc, char** argv) {
         }
     }
 
-    for(int i = 0; i < my_cells.size(); ++i) {
-        auto cell = my_cells[i];
-        cell.update_lid(bbox);
-        assert(cell.lid == i);
-    }
-
     mesh::insert_or_remove(&my_cells, &particles, bbox);
 
+    for(int i = 0; i < my_cells.size(); ++i) {
+        auto cell = my_cells[i];
+        cell.update_lid(domain.size_x, domain.size_y, domain.size_z, bbox);
+        assert(cell.lid == i);
+    }
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     auto stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);

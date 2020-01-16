@@ -47,7 +47,7 @@ int translate_iteration_to_vertex_group(int physical_iteration, lb::Point_3 coor
 class Partition {
 public:
 
-    const Box3 d;
+    const Box3 domain;
     const Real* grid_cell_size;
     Point_3 coord;
 
@@ -61,7 +61,7 @@ public:
     Partition(Point_3 coord, const Box3& domain, const Real* grid_cell_size,
               Point_3 v1, Point_3 v2, Point_3 v3, Point_3 v4,
               Point_3 v5, Point_3 v6, Point_3 v7, Point_3 v8)
-            : d(domain), grid_cell_size(grid_cell_size), coord(std::move(coord)),
+            : domain(domain), grid_cell_size(grid_cell_size), coord(std::move(coord)),
               vertices({std::move(v1), std::move(v2), std::move(v3), std::move(v4),
                         std::move(v5), std::move(v6), std::move(v7), std::move(v8)}){
         get_MPI_worldsize(num_part);
@@ -74,7 +74,7 @@ public:
     template<class InputIterator>
     Partition(Point_3 coord, const Box3& domain, const Real* grid_cell_size,
               InputIterator beg)
-            : d(domain), grid_cell_size(grid_cell_size), coord(std::move(coord)),
+            : domain(domain), grid_cell_size(grid_cell_size), coord(std::move(coord)),
               vertices(deserialize(beg)) {
         get_MPI_worldsize(num_part);
         for(int j = 0; j < 8; ++j)
@@ -326,7 +326,7 @@ public:
 
             //std::cout << "LOADS: " << loads.size() << std::endl;
             auto f1  = -get_vertex_force(v, cls.second, normalized_loads);
-            auto f1_after = constraint_force(d, v, f1);
+            auto f1_after = constraint_force(domain, v, f1);
 #ifdef DEBUG
             std::cout << my_rank << " vertex force is "<< f1_after << std::endl;
 #endif
@@ -404,7 +404,7 @@ public:
                 std::transform(loads.cbegin(), loads.cend(), std::back_inserter(normalized_loads), [&avg_load](auto n){return n/avg_load;});
                 auto cls = (*search_in_linear_hashmap<VertexIndex, std::vector<Point_3>, 8>(all_cl, vid)).second;
                 auto f1  = -get_vertex_force(v, cls, normalized_loads);
-                auto f1_after = constraint_force(d, v, f1);
+                auto f1_after = constraint_force(domain, v, f1);
                 int are_all_valid = false;
                 for(int trial = 0; trial < MAX_TRIAL; ++trial) {
                     auto new_vertices = vertices;
@@ -472,7 +472,7 @@ public:
         std::vector<Partition> neighborhoods;
         for(int i = 0; i < number_of_neighbors; ++i) {
             // building neighborhood of vertex
-            neighborhoods.emplace_back(coord, d, grid_cell_size, (recv_buff.begin() + i * 24));
+            neighborhoods.emplace_back(coord, domain, grid_cell_size, (recv_buff.begin() + i * 24));
         }
 
         //TAG MY DATA
@@ -599,7 +599,7 @@ public:
         std::vector<Partition> neighborhoods;
         for(int i = 0; i < number_of_neighbors; ++i) {
             // building neighborhood of vertex
-            neighborhoods.emplace_back(coord, d, grid_cell_size, (recv_buff.begin() + i * 24));
+            neighborhoods.emplace_back(coord, domain, grid_cell_size, (recv_buff.begin() + i * 24));
         }
 
         auto logger = zz::log::get_logger("default", true);
@@ -618,7 +618,7 @@ public:
         while(data_id < nb_elements) {
             auto point = elements[data_id].get_center_point();
             bool is_real_cell = this->contains(point);
-            elements[data_id].update_lid(bbox);
+            elements[data_id].update_lid(domain.size_x, domain.size_y, domain.size_z, bbox);
             if(!is_real_cell) { // it is not in my polygon
                 /* is it a REAL_CELL that must be migrated ? */
                 if(elements[data_id].type == mesh::REAL_CELL) {
@@ -640,14 +640,18 @@ public:
                 nb_empty++;
             } else { // contained by polygon but wrong local id
                 if(elements[data_id].type == mesh::REAL_CELL){
-                    auto lid = elements[data_id].get_lid(bbox);
+                    auto lid = elements[data_id].lid;
                     new_elements.at(lid) = std::move(elements[data_id]); // put in the right position in the new array;
                     nb_to_keep++;
                 }
             }
             data_id++;
         }
-
+        for(int i = 0; i < new_elements.size(); ++i) {
+            auto cell = new_elements[i];
+            //cell.update_lid(domain.size_x, domain.size_y, domain.size_z, bbox);
+            assert(cell.lid == i || cell.type != mesh::REAL_CELL);
+        }
 #ifdef DEBUG
         std::cout << my_rank << " transferred " << nb_migrate  << std::endl;
 #endif
@@ -692,10 +696,13 @@ public:
 
                 /* create cell to hold elements */
                 for(DataIndex gid : gids_buf) {
-                    auto lid = mesh::compute_lid(mesh::Cell<A>::get_msx(), mesh::Cell<A>::get_msy(), mesh::Cell<A>::get_msz(), gid, bbox);
-                    assert(new_elements.at(lid).type != mesh::REAL_CELL);
-                    new_elements.emplace(new_elements.begin() + lid, gid, bbox, mesh::REAL_CELL);
+                    Cell c(gid, domain.size_x, domain.size_y, domain.size_z, bbox, mesh::REAL_CELL);
+                    auto lid = mesh::compute_lid(domain.size_x, domain.size_y, domain.size_z, gid, bbox);
+                    std::cout << my_rank << " "<< bbox << std::endl;
+                    //assert(new_elements.at(lid).type != mesh::REAL_CELL);
+                    new_elements.emplace(new_elements.begin() + lid, gid, domain.size_x, domain.size_y, domain.size_z, bbox, mesh::REAL_CELL);
                 }
+
             }
 
             for(int nid = 0; nid < number_of_neighbors; ++nid) {
@@ -712,7 +719,6 @@ public:
                     auto indexes = position_to_index(el.position[0],el.position[1],el.position[2], mesh::Cell<A>::get_cell_size());
                     DataIndex ix = std::get<0>(indexes), iy = std::get<1>(indexes),iz = std::get<2>(indexes);
                     DataIndex lid = (ix - bbox.x_idx_min) + bbox.size_x * (iy - bbox.y_idx_min) + bbox.size_y * bbox.size_x * (iz - bbox.z_idx_min);
-
                     new_elements.at(lid).add(std::move(el));
                 }
             }
@@ -850,7 +856,7 @@ public:
     template<class NumericalType>
     const NumericalType get_vertex_id(const Point_3& v, int N) const {
         auto vertices_per_row = (NumericalType) std::cbrt(N)+1;
-        const Real step = (d.xmax - d.xmin) / (vertices_per_row);
+        const Real step = (domain.xmax - domain.xmin) / (vertices_per_row);
         return (v.x() / step) + vertices_per_row * v.z() / step  + vertices_per_row * vertices_per_row * v.y() / step;
     }
 

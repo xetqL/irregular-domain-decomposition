@@ -12,6 +12,7 @@
 
 namespace mesh {
     enum TCellType {REAL_CELL = 1, EMPTY_CELL=2, GHOST_CELL=3, UNITIALIZED_CELL=-1};
+    type::DataIndex compute_lid(type::DataIndex msx, type::DataIndex msy, type::DataIndex msz, type::DataIndex gid, lb::Box3 bbox);
 
 template<class ContainedElement>
 struct Cell {
@@ -28,14 +29,14 @@ public:
 
     Cell(TCellType type) : gid(0), lid(0), type(type) {};
 
-    Cell(IndexType gid, lb::Box3 bbox) : gid(gid), type(TCellType::REAL_CELL) {
-        update_lid(bbox);
+    Cell(IndexType gid, IndexType msx, IndexType msy, IndexType msz, lb::Box3 bbox) : gid(gid), type(TCellType::REAL_CELL) {
+        update_lid(msx, msy, msz, bbox);
     };
 
     Cell(IndexType gid, TCellType type) : gid(gid), lid(0), type(type) {};
 
-    Cell(IndexType gid, lb::Box3 bbox, TCellType type) : gid(gid), type(type) {
-        update_lid(bbox);
+    Cell(IndexType gid, IndexType msx, IndexType msy, IndexType msz, lb::Box3 bbox, TCellType type) : gid(gid), type(type) {
+        update_lid(msx, msy, msz, bbox);
     };
 
     inline size_t get_number_of_elements(){
@@ -55,16 +56,17 @@ public:
         return c;
     }
 
-    void update_lid(lb::Box3 bbox){
-        IndexType x, y, z;
-        lb::cell_to_local_position(Cell::get_msx(), Cell::get_msy(), Cell::get_msz(), bbox, gid, &x, &y, &z);
-        lid  = lb::grid_index_to_cell(x, y, z, bbox.size_x, bbox.size_y, bbox.size_z);
+
+    IndexType get_lid(IndexType msx, IndexType msy, IndexType msz, lb::Box3 bbox){
+        return mesh::compute_lid(msx, msy, msz, gid, bbox);
     }
 
-    IndexType get_lid(lb::Box3 bbox){
-        IndexType x, y, z;
-        lb::cell_to_local_position(Cell::get_msx(), Cell::get_msy(), Cell::get_msz(), bbox, gid, &x, &y, &z);
-        return lb::grid_index_to_cell(x, y, z, bbox.size_x, bbox.size_y, bbox.size_z);
+    IndexType get_lid(){
+        return lid;
+    }
+
+    void update_lid(IndexType msx, IndexType msy, IndexType msz, lb::Box3 bbox){
+        lid = get_lid(msx, msy, msz, bbox);
     }
 
     std::tuple<Real, Real, Real> get_center() const {
@@ -82,7 +84,7 @@ public:
     std::tuple<Real, Real, Real> get_coordinates() const {
         IndexType x, y, z;
         lb::linear_to_grid(gid, Cell<ContainedElement>::get_msx(), Cell<ContainedElement>::get_msy(), x, y, z); //cell_to_global_position(Cell::get_msx(), Cell::get_msy(), gid);
-        return std::make_tuple(x*Cell<ContainedElement>::get_cell_size(), y*Cell<ContainedElement>::get_cell_size(), z*Cell<ContainedElement>::get_cell_size());
+        return std::make_tuple(x, y, z);
     }
 
     void add(ContainedElement e) {
@@ -148,8 +150,6 @@ public:
 
 };
 
-type::DataIndex compute_lid(type::DataIndex msx, type::DataIndex msy, type::DataIndex msz, type::DataIndex gid, lb::Box3 bbox);
-
 
 template<class T>
 void insert_or_remove(std::vector<Cell<T>>* _cells, std::vector<T>* _elements, lb::Box3 bbox) {
@@ -169,8 +169,30 @@ void insert_or_remove(std::vector<Cell<T>>* _cells, std::vector<T>* _elements, l
     std::cout << "Number of particle added: " << nbp << "/" << elements.size()<<  std::endl;
     elements.clear();
 }
+template<class T>
+std::vector<Cell<T>> generate_lattice_single_type(type::DataIndex msx, type::DataIndex msy, type::DataIndex msz,
+                                                  type::DataIndex x_proc_idx, type::DataIndex y_proc_idx, type::DataIndex z_proc_idx,
+                                                  type::DataIndex cell_in_my_cols, type::DataIndex cell_in_my_rows, type::DataIndex cell_in_my_depth,
+                                                  mesh::TCellType type) {
+    using Cell = Cell<T>;
+    auto cell_per_process = cell_in_my_cols * cell_in_my_rows;
+    std::vector<Cell> my_cells; my_cells.reserve(cell_per_process);
 
-type::DataIndex get_lid(type::DataIndex msx, type::DataIndex msy, type::DataIndex msz, type::DataIndex gid, lb::Box3 bbox);
+    auto x_shift = (cell_in_my_rows *  x_proc_idx);
+    auto y_shift = (cell_in_my_cols *  y_proc_idx);
+    auto z_shift = (cell_in_my_depth * z_proc_idx);
+
+    for(int z = 0; z < cell_in_my_depth; ++z) {
+        for(int y = 0; y < cell_in_my_cols; ++y) {
+            for(int x = 0; x < cell_in_my_rows; ++x) {
+                auto gid = (x_shift + x) + (y_shift + y) * msx + (z_shift + z) * msx * msy;
+                my_cells.emplace_back(gid, type);
+            }
+        }
+    }
+
+    return my_cells;
+}
 
 }
 #endif //ADLBIRREG_CELL_HPP
