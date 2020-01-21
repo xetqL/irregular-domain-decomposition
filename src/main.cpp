@@ -69,44 +69,51 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
-    const type::Real DOMAIN_SIZE_X = params.simsize_x;
-    const type::Real DOMAIN_SIZE_Y = params.simsize_y;
-    const type::Real DOMAIN_SIZE_Z = params.simsize_z;
+    mesh::GridParams& grid_params = mesh::GridParams::get_instance();
 
-    Cell::get_cell_size() = params.simsize_x / 10.0f;//6.25 * params.sig_lj * params.sig_lj;
-    Cell::get_msx()       = (type::DataIndex) (DOMAIN_SIZE_X / Cell::get_cell_size());
-    Cell::get_msy()       = (type::DataIndex) (DOMAIN_SIZE_Y / Cell::get_cell_size());
-    Cell::get_msz()       = (type::DataIndex) (DOMAIN_SIZE_Z / Cell::get_cell_size());
+    grid_params.set_grid_resolution(6.25 * params.sig_lj * params.sig_lj);
+
+    const type::Real DOMAIN_SIZE_X = grid_params.get_grid_resolution() * std::ceil(params.simsize_x / grid_params.get_grid_resolution());
+    std::cout << DOMAIN_SIZE_X << std::endl;
+    const type::Real DOMAIN_SIZE_Y = grid_params.get_grid_resolution() * std::ceil(params.simsize_y / grid_params.get_grid_resolution());
+    std::cout << DOMAIN_SIZE_Y << std::endl;
+    const type::Real DOMAIN_SIZE_Z = grid_params.get_grid_resolution() * std::ceil(params.simsize_z / grid_params.get_grid_resolution());
+    std::cout << DOMAIN_SIZE_Z << std::endl;
+
+    grid_params.set_grid_dimensions(
+            (type::DataIndex) (DOMAIN_SIZE_X / grid_params.get_grid_resolution()),
+            (type::DataIndex) (DOMAIN_SIZE_Y / grid_params.get_grid_resolution()),
+            (type::DataIndex) (DOMAIN_SIZE_Z / grid_params.get_grid_resolution()));
 
     const auto procs_x = params.xprocs,
                procs_y = params.yprocs,
                procs_z = params.zprocs;
 
-    const auto cell_in_my_rows  = Cell::get_msx() / procs_x,
-               cell_in_my_cols  = Cell::get_msy() / procs_y,
-               cell_in_my_depth = Cell::get_msz() / procs_z;
+    const auto cell_in_my_rows  = grid_params.msx() / procs_x,
+               cell_in_my_cols  = grid_params.msy() / procs_y,
+               cell_in_my_depth = grid_params.msz() / procs_z;
 
     const auto cell_per_process = cell_in_my_rows * cell_in_my_cols * cell_in_my_depth,
                MAX_ITER = (type::DataIndex) params.MAX_STEP;
 
-    const auto msx = Cell::get_msx();
-    const auto msy = Cell::get_msy();
-    const auto msz = Cell::get_msz();
-    const auto total_cell_count =  Cell::get_msx() * Cell::get_msy() * Cell::get_msz();
+    const auto msx = grid_params.msx();
+    const auto msy = grid_params.msy();
+    const auto msz = grid_params.msz();
+    const auto total_cell_count =  grid_params.msx() * grid_params.msy() * grid_params.msz();
 
-    lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z, &Cell::get_cell_size());
+    lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z, &grid_params.get_grid_resolution());
 
     if(!rank) {
         std::cout << "Cell number (X,Y,Z) = (" << msx<<","<<msy<<","<<msz<<")"<< std::endl;
         std::cout << "Total cell count: " << total_cell_count << std::endl;
-        std::cout << "Cell size = " << Cell::get_cell_size() << std::endl;
-        std::cout << "Domain size X = "<< (cell_in_my_rows  * procs_x * Cell::get_cell_size()) << std::endl;
+        std::cout << "Cell size = " << grid_params.get_grid_resolution() << std::endl;
+        std::cout << "Domain size X = "<< (cell_in_my_rows  * procs_x * grid_params.get_grid_resolution()) << std::endl;
     }
 
     d.bootstrap_partitions(world_size);
     auto part = d.get_my_partition(my_rank);
     part.init_communicators(world_size);
-    lb::Box3 bbox(part.vertices, Cell::get_cell_size());
+    lb::Box3 bbox(part.vertices, grid_params.get_grid_resolution());
     std::cout << bbox << std::endl;
     auto domain = d.get_bounding_box();
     type::DataIndex x_proc_idx, y_proc_idx, z_proc_idx;

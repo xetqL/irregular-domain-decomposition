@@ -7,7 +7,8 @@
 
 #include <Partition.hpp>
 
-namespace lb{
+namespace lb {
+
 
 struct Domain {
 
@@ -29,12 +30,6 @@ struct Domain {
             v8(x, y, z),
             grid_cell_size(cell_size)
     {}
-
-    /*Domain (const Point_3& p1,const Point_3& p2,const Point_3& p3,const Point_3& p4,
-            const Point_3& p5,const Point_3& p6,const Point_3& p7,const Point_3& p8):
-            v1(p1),v2(p2),v3(p3),v4(p4),
-            v5(p5),v6(p6),v7(p7),v8(p8) {
-    }*/
 
     const type::Real get_grid_cell_size() const {
         return *grid_cell_size;
@@ -91,7 +86,7 @@ struct Domain {
      * number of partitions must be a perfect cube
      */
     void bootstrap_partitions_cubical(unsigned int nb_partitions, const Point_3& p1,const Point_3& p2,const Point_3& p3,const Point_3& p4,
-                                      const Point_3& p5,const Point_3& p6,const Point_3& p7,const Point_3& p8){
+                                      const Point_3& p5,const Point_3& p6,const Point_3& p7,const Point_3& p8) {
         const type::Real proc_per_row = std::cbrt(nb_partitions);
         const int    row_size     = (int) proc_per_row;
         //const type::Real p_m1         = ((proc_per_row - 1) / proc_per_row);

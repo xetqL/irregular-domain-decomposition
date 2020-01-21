@@ -18,20 +18,20 @@ namespace
 
 TEST(CellLocalID, Computation) {
     using Cell = mesh::Cell<elements::Element<3>>;
-
-        Cell::get_cell_size()   = 0.5;
-        auto step             = Cell::get_cell_size();
+        mesh::GridParams& gp = mesh::GridParams::get_instance();
+        gp.set_grid_resolution(0.5);
+        auto step             = gp.get_grid_resolution();
 
         const int DOMAIN_SIZE_X = 10;
         const int DOMAIN_SIZE_Y = 10;
         const int DOMAIN_SIZE_Z = 10;
 
-        Cell::get_msx() = DOMAIN_SIZE_X / Cell::get_cell_size();
-        Cell::get_msy() = DOMAIN_SIZE_Y / Cell::get_cell_size();
-        Cell::get_msz() = DOMAIN_SIZE_Z / Cell::get_cell_size();
-        auto msx              = Cell::get_msx();
-        auto msy              = Cell::get_msy();
-        auto msz              = Cell::get_msz();
+        gp.set_grid_dimensions(DOMAIN_SIZE_X / gp.get_grid_resolution(),
+        DOMAIN_SIZE_Y / gp.get_grid_resolution(),
+        DOMAIN_SIZE_Z / gp.get_grid_resolution());
+        auto msx              = gp.msx();
+        auto msy              = gp.msy();
+        auto msz              = gp.msz();
 
     std::array<lb::Point_3, 8> vertices = {
             lb::Point_3(0,  5,  5),
@@ -46,34 +46,32 @@ TEST(CellLocalID, Computation) {
 
     type::DataIndex gid = 7990;
 
-    lb::Box3 bbox(vertices, Cell::get_cell_size());
+    lb::Box3 bbox(vertices, gp.get_grid_resolution());
 
-    Cell cell(gid, Cell::get_msx(), Cell::get_msy(), Cell::get_msz(), bbox);
+    Cell cell(gid, gp.msx(), gp.msy(), gp.msz(), bbox);
     type::DataIndex x,y,z;
 
-    lb::cell_to_local_position(Cell::get_msx(), Cell::get_msy(), Cell::get_msz(), bbox, gid, &x, &y, &z);
+    lb::cell_to_local_position(gp.msx(), gp.msy(), gp.msz(), bbox, gid, &x, &y, &z);
 
-    auto lid = mesh::compute_lid(Cell::get_msx(), Cell::get_msy(), Cell::get_msz(), gid, bbox);
+    auto lid = mesh::compute_lid(gp.msx(), gp.msy(), gp.msz(), gid, bbox);
 
     EXPECT_LT(lid, bbox.get_number_of_cells());
 }
 
 TEST(ParticleLocalID, Computation) {
     using Cell = mesh::Cell<elements::Element<3>>;
-
-        Cell::get_cell_size()   = 0.5;
-        auto step             = Cell::get_cell_size();
+        mesh::GridParams& gp = mesh::GridParams::get_instance();
+        gp.set_grid_resolution(0.5);
+        auto step             = gp.get_grid_resolution();
 
         const int DOMAIN_SIZE_X = 10;
         const int DOMAIN_SIZE_Y = 10;
         const int DOMAIN_SIZE_Z = 10;
 
-        Cell::get_msx() = DOMAIN_SIZE_X / Cell::get_cell_size();
-        Cell::get_msy() = DOMAIN_SIZE_Y / Cell::get_cell_size();
-        Cell::get_msz() = DOMAIN_SIZE_Z / Cell::get_cell_size();
-        auto msx              = Cell::get_msx();
-        auto msy              = Cell::get_msy();
-        auto msz              = Cell::get_msz();
+        gp.set_grid_dimensions(DOMAIN_SIZE_X / gp.get_grid_resolution(),DOMAIN_SIZE_Y / gp.get_grid_resolution(),DOMAIN_SIZE_Z / gp.get_grid_resolution());
+        auto msx              = gp.msx();
+        auto msy              = gp.msy();
+        auto msz              = gp.msz();
 
     std::array<lb::Point_3, 8> vertices = {
             lb::Point_3(0,  4.96129,  0),
@@ -86,38 +84,37 @@ TEST(ParticleLocalID, Computation) {
             lb::Point_3(5, 10, 5),
     };
 
-    lb::Box3 bbox(vertices, Cell::get_cell_size());
+    lb::Box3 bbox(vertices, gp.get_grid_resolution());
 
     elements::Element<3> el({0,0,0}, {0,0,0});
 
     auto gid = lb::position_to_cell(el.position[0],el.position[1],el.position[2],
-                                Cell::get_cell_size(),
-                                Cell::get_msx(),
-                                Cell::get_msy());
+                                gp.get_grid_resolution(),
+                                gp.msx(),
+                                gp.msy());
 
     auto lid = mesh::compute_lid(
-            Cell::get_msx(),
-            Cell::get_msy(),
-            Cell::get_msz(),
+            gp.msx(),
+            gp.msy(),
+            gp.msz(),
             gid, bbox);
 }
 
 TEST(CellLocalID, areDifferent) {
     using Cell = mesh::Cell<elements::Element<3>>;
-
-        Cell::get_cell_size()   = 0.5;
-        auto step             = Cell::get_cell_size();
+        mesh::GridParams& gp = mesh::GridParams::get_instance();
+        gp.set_grid_resolution(0.5);
+        auto step             = gp.get_grid_resolution();
 
         const int DOMAIN_SIZE_X = 10;
         const int DOMAIN_SIZE_Y = 10;
         const int DOMAIN_SIZE_Z = 10;
 
-        Cell::get_msx() = DOMAIN_SIZE_X / Cell::get_cell_size();
-        Cell::get_msy() = DOMAIN_SIZE_Y / Cell::get_cell_size();
-        Cell::get_msz() = DOMAIN_SIZE_Z / Cell::get_cell_size();
-        auto msx              = Cell::get_msx();
-        auto msy              = Cell::get_msy();
-        auto msz              = Cell::get_msz();
+        gp.set_grid_dimensions(DOMAIN_SIZE_X / gp.get_grid_resolution(),DOMAIN_SIZE_Y / gp.get_grid_resolution(),DOMAIN_SIZE_Z / gp.get_grid_resolution());
+
+        auto msx              = gp.msx();
+        auto msy              = gp.msy();
+        auto msz              = gp.msz();
 
     std::array<lb::Point_3, 8> vertices = {
             lb::Point_3(0,  5,  0),
@@ -130,7 +127,7 @@ TEST(CellLocalID, areDifferent) {
             lb::Point_3(5, 10, 5),
     };
 
-    lb::Box3 bbox(vertices, Cell::get_cell_size());
+    lb::Box3 bbox(vertices, gp.get_grid_resolution());
 
     elements::Element<3> el({0,0,0}, {0,0,0});
 
@@ -138,15 +135,15 @@ TEST(CellLocalID, areDifferent) {
     type::DataIndex gid2 = 600;
 
     auto lid1 = mesh::compute_lid(
-            Cell::get_msx(),
-            Cell::get_msy(),
-            Cell::get_msz(),
+            gp.msx(),
+            gp.msy(),
+            gp.msz(),
             gid1, bbox);
 
     auto lid2 = mesh::compute_lid(
-            Cell::get_msx(),
-            Cell::get_msy(),
-            Cell::get_msz(),
+            gp.msx(),
+            gp.msy(),
+            gp.msz(),
             gid2, bbox);
 
     EXPECT_NE(gid1, gid2);
@@ -156,20 +153,18 @@ TEST(CellLocalID, areDifferent) {
 
 TEST(CellLocalID, areDifferent2) {
     using Cell = mesh::Cell<elements::Element<3>>;
+        mesh::GridParams& gp = mesh::GridParams::get_instance();
+        gp.set_grid_resolution(0.5);
+        auto step             = gp.get_grid_resolution();
 
-    Cell::get_cell_size()   = 0.5;
-    auto step             = Cell::get_cell_size();
+        const int DOMAIN_SIZE_X = 10;
+        const int DOMAIN_SIZE_Y = 10;
+        const int DOMAIN_SIZE_Z = 10;
 
-    const int DOMAIN_SIZE_X = 10;
-    const int DOMAIN_SIZE_Y = 10;
-    const int DOMAIN_SIZE_Z = 10;
-
-    Cell::get_msx() = DOMAIN_SIZE_X / Cell::get_cell_size();
-    Cell::get_msy() = DOMAIN_SIZE_Y / Cell::get_cell_size();
-    Cell::get_msz() = DOMAIN_SIZE_Z / Cell::get_cell_size();
-    auto msx              = Cell::get_msx();
-    auto msy              = Cell::get_msy();
-    auto msz              = Cell::get_msz();
+        gp.set_grid_dimensions(DOMAIN_SIZE_X / gp.get_grid_resolution(),DOMAIN_SIZE_Y / gp.get_grid_resolution(),DOMAIN_SIZE_Z / gp.get_grid_resolution());
+    auto msx              = gp.msx();
+    auto msy              = gp.msy();
+    auto msz              = gp.msz();
 
     std::array<lb::Point_3, 8> vertices = {
             lb::Point_3(0,  5,  0),
@@ -182,14 +177,14 @@ TEST(CellLocalID, areDifferent2) {
             lb::Point_3(5, 10, 5),
     };
 
-    lb::Box3 bbox(vertices, Cell::get_cell_size());
+    lb::Box3 bbox(vertices, gp.get_grid_resolution());
 
     type::DataIndex gid1 = 12;
     type::DataIndex gid2 = 20;
     type::DataIndex x,y,z;
     std::tie(x,y,z) = lb::cell_to_global_position(msx,msy,msz,gid1);
-    Cell c1(gid1, Cell::get_msx(), Cell::get_msy(), Cell::get_msz(), bbox);
-    Cell c2(gid2, Cell::get_msx(), Cell::get_msy(), Cell::get_msz(), bbox);
+    Cell c1(gid1, gp.msx(), gp.msy(), gp.msz(), bbox);
+    Cell c2(gid2, gp.msx(), gp.msy(), gp.msz(), bbox);
     EXPECT_NE(c1.get_lid(), c2.get_lid());
 }
 
@@ -198,118 +193,163 @@ TEST(CellLocalID, areDifferent2) {
 TEST(CellLocalID, RearrangingCell) {
     MPI_Init(nullptr, nullptr);
     using Cell = mesh::Cell<elements::Element<3>>;
+    mesh::GridParams& gp = mesh::GridParams::get_instance();
+    gp.set_grid_resolution(0.625);
 
-    Cell::get_cell_size()   = 0.5;
+    const type::Real DOMAIN_SIZE_X = 100.625;
+    const type::Real DOMAIN_SIZE_Y = 100.625;
+    const type::Real DOMAIN_SIZE_Z = 100.625;
 
-    const type::Real DOMAIN_SIZE_X = 10;
-    const type::Real DOMAIN_SIZE_Y = 10;
-    const type::Real DOMAIN_SIZE_Z = 10;
+        gp.set_grid_dimensions(DOMAIN_SIZE_X / gp.get_grid_resolution(),
+                DOMAIN_SIZE_Y / gp.get_grid_resolution(),DOMAIN_SIZE_Z / gp.get_grid_resolution());
 
-    Cell::get_msx() = DOMAIN_SIZE_X / Cell::get_cell_size();
-    Cell::get_msy() = DOMAIN_SIZE_Y / Cell::get_cell_size();
-    Cell::get_msz() = DOMAIN_SIZE_Z / Cell::get_cell_size();
+    std::cout << gp.msx() << std::endl;
+    std::cout << gp.msy() << std::endl;
+    std::cout << gp.msz() << std::endl;
 
     int my_rank = 0, worldsize = 8;
     int procs_x = std::cbrt(worldsize), procs_y = std::cbrt(worldsize), procs_z = std::cbrt(worldsize);
 
-    auto cell_per_col     =  Cell::get_msx() / procs_x;
+    auto cell_per_col     =  gp.msx() / procs_x;
 
     type::DataIndex x_proc_idx, y_proc_idx, z_proc_idx;
 
     lb::linear_to_grid(my_rank, procs_x, procs_y, x_proc_idx, y_proc_idx, z_proc_idx);
 
     auto my_cells = mesh::generate_lattice_single_type<int>(
-            Cell::get_msx(), Cell::get_msy(), Cell::get_msz(),
+            gp.msx(), gp.msy(), gp.msz(),
             x_proc_idx, y_proc_idx, z_proc_idx,
             cell_per_col, cell_per_col, cell_per_col,
             mesh::TCellType::REAL_CELL);
 
-    lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z, &Cell::get_cell_size());
+    lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z, &gp.get_grid_resolution());
 
     d.bootstrap_partitions(worldsize);
     auto part = d.get_my_partition(my_rank);
-    lb::Box3 bbox(part.vertices, Cell::get_cell_size());
+    lb::Box3 bbox(part.vertices, gp.get_grid_resolution());
 
     std::cout << bbox << std::endl;
     for(int i = 0; i < my_cells.size(); ++i) {
         auto cell = my_cells[i];
-        auto lid = cell.get_lid(Cell::get_msx(), Cell::get_msy(), Cell::get_msz(), bbox);
+        auto lid = cell.get_lid(gp.msx(), gp.msy(), gp.msz(), bbox);
         EXPECT_EQ(i, lid);
     }
 }
 
-
-TEST(DomainSizeX, Check) {
+TEST(Cell, uniqueGID) {
     using Cell = mesh::Cell<elements::Element<3>>;
 
-    Cell::get_cell_size()   = 0.5;
+        mesh::GridParams& gp = mesh::GridParams::get_instance();
+        gp.set_grid_resolution(0.5);
+        auto step             = gp.get_grid_resolution();
 
-    const type::Real DOMAIN_SIZE_X = 10;
-    const type::Real DOMAIN_SIZE_Y = 10;
-    const type::Real DOMAIN_SIZE_Z = 10;
+        const int DOMAIN_SIZE_X = 10;
+        const int DOMAIN_SIZE_Y = 10;
+        const int DOMAIN_SIZE_Z = 10;
 
-    Cell::get_msx() = DOMAIN_SIZE_X / Cell::get_cell_size();
-    Cell::get_msy() = DOMAIN_SIZE_Y / Cell::get_cell_size();
-    Cell::get_msz() = DOMAIN_SIZE_Z / Cell::get_cell_size();
+        gp.set_grid_dimensions(DOMAIN_SIZE_X / gp.get_grid_resolution(),DOMAIN_SIZE_Y / gp.get_grid_resolution(),DOMAIN_SIZE_Z / gp.get_grid_resolution());
 
-    int my_rank = 0, worldsize = 8;
+    int my_rank = 0, worldsize = 1;
     int procs_x = std::cbrt(worldsize), procs_y = std::cbrt(worldsize), procs_z = std::cbrt(worldsize);
 
-    auto cell_per_col     =  Cell::get_msx() / procs_x;
+    auto cell_per_col     =  gp.msx() / procs_x;
 
     type::DataIndex x_proc_idx, y_proc_idx, z_proc_idx;
 
     lb::linear_to_grid(my_rank, procs_x, procs_y, x_proc_idx, y_proc_idx, z_proc_idx);
 
     auto my_cells = mesh::generate_lattice_single_type<int>(
-            Cell::get_msx(), Cell::get_msy(), Cell::get_msz(),
+            gp.msx(), gp.msy(), gp.msz(),
             x_proc_idx, y_proc_idx, z_proc_idx,
             cell_per_col, cell_per_col, cell_per_col,
             mesh::TCellType::REAL_CELL);
 
-    lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z, &Cell::get_cell_size());
+    lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z, &gp.get_grid_resolution());
 
     d.bootstrap_partitions(worldsize);
     auto part = d.get_my_partition(my_rank);
-    EXPECT_EQ(d.get_bounding_box().size_x, Cell::get_msx());
-    EXPECT_EQ(d.get_bounding_box().size_y, Cell::get_msy());
-    EXPECT_EQ(d.get_bounding_box().size_z, Cell::get_msz());
+    lb::Box3 bbox(part.vertices, gp.get_grid_resolution());
+
+    std::vector<bool> found(my_cells.size(), false);
+
+    for(auto cell : my_cells) {
+        EXPECT_EQ(found.at(cell.gid), false);
+        found.at(cell.gid) = true;
+    }
+}
+
+TEST(DomainSizeX, Check) {
+    using Cell = mesh::Cell<elements::Element<3>>;
+        mesh::GridParams& gp = mesh::GridParams::get_instance();
+        gp.set_grid_resolution(0.000625);
+        auto step             = gp.get_grid_resolution();
+
+
+        const type::Real DOMAIN_SIZE_X = 0.100625;
+        const type::Real DOMAIN_SIZE_Y = 0.100625;
+        const type::Real DOMAIN_SIZE_Z = 0.100625;
+
+        gp.set_grid_dimensions(DOMAIN_SIZE_X / gp.get_grid_resolution(),DOMAIN_SIZE_Y / gp.get_grid_resolution(),DOMAIN_SIZE_Z / gp.get_grid_resolution());
+
+
+    int my_rank = 0, worldsize = 8;
+    int procs_x = std::cbrt(worldsize), procs_y = std::cbrt(worldsize), procs_z = std::cbrt(worldsize);
+
+    auto cell_per_col     =  gp.msx() / procs_x;
+
+    type::DataIndex x_proc_idx, y_proc_idx, z_proc_idx;
+
+    lb::linear_to_grid(my_rank, procs_x, procs_y, x_proc_idx, y_proc_idx, z_proc_idx);
+
+    auto my_cells = mesh::generate_lattice_single_type<int>(
+            gp.msx(), gp.msy(), gp.msz(),
+            x_proc_idx, y_proc_idx, z_proc_idx,
+            cell_per_col, cell_per_col, cell_per_col,
+            mesh::TCellType::REAL_CELL);
+
+    lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z, &gp.get_grid_resolution());
+
+    d.bootstrap_partitions(worldsize);
+    auto part = d.get_my_partition(my_rank);
+    EXPECT_EQ(d.get_bounding_box().size_x, gp.msx());
+    EXPECT_EQ(d.get_bounding_box().size_y, gp.msy());
+    EXPECT_EQ(d.get_bounding_box().size_z, gp.msz());
 }
 
 TEST(DomainSizeX, ZeroGidZeroLid) {
     using Cell = mesh::Cell<elements::Element<3>>;
 
-    Cell::get_cell_size()   = 0.5;
+        mesh::GridParams& gp = mesh::GridParams::get_instance();
+        gp.set_grid_resolution(0.000625);
+        auto step             = gp.get_grid_resolution();
 
-    const type::Real DOMAIN_SIZE_X = 10;
-    const type::Real DOMAIN_SIZE_Y = 10;
-    const type::Real DOMAIN_SIZE_Z = 10;
 
-    Cell::get_msx() = DOMAIN_SIZE_X / Cell::get_cell_size();
-    Cell::get_msy() = DOMAIN_SIZE_Y / Cell::get_cell_size();
-    Cell::get_msz() = DOMAIN_SIZE_Z / Cell::get_cell_size();
+        const type::Real DOMAIN_SIZE_X = 0.100625;
+        const type::Real DOMAIN_SIZE_Y = 0.100625;
+        const type::Real DOMAIN_SIZE_Z = 0.100625;
 
+        gp.set_grid_dimensions(DOMAIN_SIZE_X / gp.get_grid_resolution(),DOMAIN_SIZE_Y / gp.get_grid_resolution(),DOMAIN_SIZE_Z / gp.get_grid_resolution());
     int my_rank = 0, worldsize = 8;
     int procs_x = std::cbrt(worldsize), procs_y = std::cbrt(worldsize), procs_z = std::cbrt(worldsize);
 
-    auto cell_per_col     =  Cell::get_msx() / procs_x;
+    auto cell_per_col     =  gp.msx() / procs_x;
 
     type::DataIndex x_proc_idx, y_proc_idx, z_proc_idx;
 
     lb::linear_to_grid(my_rank, procs_x, procs_y, x_proc_idx, y_proc_idx, z_proc_idx);
 
     auto my_cells = mesh::generate_lattice_single_type<int>(
-            Cell::get_msx(), Cell::get_msy(), Cell::get_msz(),
+            gp.msx(), gp.msy(), gp.msz(),
             x_proc_idx, y_proc_idx, z_proc_idx,
             cell_per_col, cell_per_col, cell_per_col,
             mesh::TCellType::REAL_CELL);
 
-    lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z, &Cell::get_cell_size());
+    lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z, &gp.get_grid_resolution());
 
     d.bootstrap_partitions(worldsize);
     auto part = d.get_my_partition(my_rank);
 
-    EXPECT_EQ(mesh::compute_lid(Cell::get_msx(), Cell::get_msy(), Cell::get_msz(), 0, d.get_bounding_box()), 0);
+    EXPECT_EQ(mesh::compute_lid(gp.msx(), gp.msy(), gp.msz(), 0, d.get_bounding_box()), 0);
 }
 
 } //end of namespace

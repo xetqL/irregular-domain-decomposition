@@ -11,17 +11,59 @@
 #include <zupply.hpp>
 
 namespace mesh {
-    enum TCellType {REAL_CELL = 1, EMPTY_CELL=2, GHOST_CELL=3, UNITIALIZED_CELL=-1};
-    type::DataIndex compute_lid(type::DataIndex msx, type::DataIndex msy, type::DataIndex msz, type::DataIndex gid, lb::Box3 bbox);
+
+enum TCellType {REAL_CELL = 1, EMPTY_CELL=2, GHOST_CELL=3, UNITIALIZED_CELL=-1};
+type::DataIndex compute_lid(type::DataIndex msx, type::DataIndex msy, type::DataIndex msz, type::DataIndex gid, lb::Box3 bbox);
+
+
+class GridParams {
+    type::DataIndex max_size_x, max_size_y, max_size_z;
+    type::Real    grid_resolution;
+    GridParams(){};
+public:
+    static GridParams& get_instance() {
+        static GridParams gp;
+        return gp;
+    }
+
+    GridParams(GridParams const&)      = delete;
+    void operator=(GridParams const&)  = delete;
+
+    void set_grid_resolution(type::Real _grid_resolution){
+        grid_resolution = _grid_resolution;
+    }
+
+    void set_grid_dimensions(type::DataIndex _msx, type::DataIndex _msy, type::DataIndex _msz){
+        max_size_x = _msx;
+        max_size_y = _msy;
+        max_size_z = _msz;
+    }
+
+    const type::Real& get_grid_resolution() const {
+        return grid_resolution;
+    }
+    const type::DataIndex& msx() const {
+        return max_size_x;
+    }
+    const type::DataIndex& msy() const {
+        return max_size_y;
+    }
+    const type::DataIndex& msz() const {
+        return max_size_z;
+    }
+};
+
+static GridParams& grid_params = GridParams::get_instance();
 
 template<class ContainedElement>
 struct Cell {
-    using IndexType = type::DataIndex;
-    using value_type= ContainedElement;
-    using Real      = type::Real;
+    using IndexType  = type::DataIndex;
+    using value_type = ContainedElement;
+    using Real       = type::Real;
 
     IndexType gid, lid;
     TCellType type;
+
 private:
     std::vector<ContainedElement> elements;
 public:
@@ -52,12 +94,11 @@ public:
         x+=bbox.x_idx_min;
         y+=bbox.y_idx_min;
         z+=bbox.z_idx_min;
-        c.gid = lb::grid_index_to_cell(x, y, z, Cell::get_msx(), Cell::get_msy(), Cell::get_msz());
+        c.gid = lb::grid_index_to_cell(x, y, z, grid_params.msx(), grid_params.msy(), grid_params.msz());
         return c;
     }
 
-
-    IndexType get_lid(IndexType msx, IndexType msy, IndexType msz, lb::Box3 bbox){
+    IndexType get_lid(IndexType msx, IndexType msy, IndexType msz, lb::Box3 bbox) {
         return mesh::compute_lid(msx, msy, msz, gid, bbox);
     }
 
@@ -71,19 +112,19 @@ public:
 
     std::tuple<Real, Real, Real> get_center() const {
         IndexType x, y, z;
-        lb::linear_to_grid(gid, Cell::get_msx(), Cell::get_msy(), x, y, z); //cell_to_global_position(Cell::get_msx(), Cell::get_msy(), gid);
-        return std::make_tuple(x*Cell::get_cell_size()+Cell::get_cell_size()/2.0, y*Cell::get_cell_size()+Cell::get_cell_size()/2.0, z*Cell::get_cell_size()+Cell::get_cell_size()/2.0);
+        lb::linear_to_grid(gid, grid_params.msx(), grid_params.msy(), x, y, z); //cell_to_global_position(msx, msy, gid);
+        return std::make_tuple(x*grid_params.get_grid_resolution()+grid_params.get_grid_resolution()/2.0, y*grid_params.get_grid_resolution()+grid_params.get_grid_resolution()/2.0, z*grid_params.get_grid_resolution()+grid_params.get_grid_resolution()/2.0);
     }
 
     lb::Point_3 get_center_point() const {
         IndexType x, y, z;
-        lb::linear_to_grid(gid, Cell::get_msx(), Cell::get_msy(), x, y, z); //cell_to_global_position(Cell::get_msx(), Cell::get_msy(), gid);
-        return {x*Cell::get_cell_size()+Cell::get_cell_size()/2.0, y*Cell::get_cell_size()+Cell::get_cell_size()/2.0, z*Cell::get_cell_size()+Cell::get_cell_size()/2.0};
+        lb::linear_to_grid(gid, grid_params.msx(), grid_params.msy(), x, y, z); //cell_to_global_position(msx, msy, gid);
+        return {x*grid_params.get_grid_resolution()+grid_params.get_grid_resolution()/2.0, y*grid_params.get_grid_resolution()+grid_params.get_grid_resolution()/2.0, z*grid_params.get_grid_resolution()+grid_params.get_grid_resolution()/2.0};
     }
 
     std::tuple<Real, Real, Real> get_coordinates() const {
         IndexType x, y, z;
-        lb::linear_to_grid(gid, Cell<ContainedElement>::get_msx(), Cell<ContainedElement>::get_msy(), x, y, z); //cell_to_global_position(Cell::get_msx(), Cell::get_msy(), gid);
+        lb::linear_to_grid(gid, grid_params.msx(), grid_params.msy(), x, y, z); //cell_to_global_position(msx, msy, gid);
         return std::make_tuple(x, y, z);
     }
 
@@ -102,7 +143,7 @@ public:
     typename std::vector<ContainedElement>::iterator end(){
         return elements.end();
     }
-
+/*
     static IndexType& get_msx(){
         static IndexType msx;
         return msx;
@@ -122,7 +163,7 @@ public:
         static Real size;
         return size;
     }
-
+*/
     friend bool operator==(const Cell &lhs, const Cell &rhs) {
         return lhs.gid == rhs.gid;
     }
@@ -134,18 +175,18 @@ public:
     friend std::ostream &operator<<(std::ostream &os, const Cell &cell) {
         Real x,y,z, cx, cy,cz;
         std::tie(cx,cy,cz) = cell.get_center();
-        std::tie(x,y,z)    = cell.get_coordinates();
-        os << "gid: " << cell.gid << " CENTER("<<cx<<";"<<cy<<";"<<cz <<")" << " COORD("<<x<<";"<<y<<";"<<z <<")" << " type: " << cell.type;
+        //std::tie(x,y,z)    = cell.get_coordinates();
+        //os << "gid: " << cell.gid << " CENTER("<<cx<<";"<<cy<<";"<<cz <<")" << " COORD("<<x<<";"<<y<<";"<<z <<")" << " type: " << cell.type;
         return os;
     }
 
     lb::Box3 as_box(){
         Real x, y, z;
         std::tie(x, y, z) = get_coordinates();
-        return {x, x+Cell<ContainedElement>::get_cell_size(),
-                y, y+Cell<ContainedElement>::get_cell_size(),
-                z, z+Cell<ContainedElement>::get_cell_size(),
-                     Cell<ContainedElement>::get_cell_size()};
+        return {x, x+grid_params.get_grid_resolution(),
+                y, y+grid_params.get_grid_resolution(),
+                z, z+grid_params.get_grid_resolution(),
+                     grid_params.get_grid_resolution()};
     }
 
 };
@@ -159,7 +200,7 @@ void insert_or_remove(std::vector<Cell<T>>* _cells, std::vector<T>* _elements, l
     for(T& el : elements) {
         if(bbox.contains(el.position[0], el.position[1], el.position[2])) {
             //migrate the data
-            auto indexes = lb::position_to_index(el.position[0],el.position[1],el.position[2], mesh::Cell<T>::get_cell_size());
+            auto indexes = lb::position_to_index(el.position[0],el.position[1],el.position[2], grid_params.get_grid_resolution());
             type::DataIndex ix = std::get<0>(indexes), iy = std::get<1>(indexes), iz = std::get<2>(indexes);
             type::DataIndex lid = (ix - bbox.x_idx_min) + bbox.size_x * (iy - bbox.y_idx_min) + bbox.size_y * bbox.size_x * (iz - bbox.z_idx_min);
             cells.at(lid).add(el);

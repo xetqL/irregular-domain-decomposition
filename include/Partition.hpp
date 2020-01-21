@@ -14,6 +14,7 @@
 #include "spatial_elements.hpp"
 #include "Types.hpp"
 #include "zupply.hpp"
+
 namespace lb {
 
 using namespace type;
@@ -608,7 +609,7 @@ public:
         //const auto nb_elements = elements.size();
         size_t data_id = 0;
         size_t nb_migrate = 0;
-        lb::Box3 bbox(vertices, Cell::get_cell_size());
+        lb::Box3 bbox(vertices, *grid_cell_size);
         /* resize to my bounding box */
         //elements.resize(bbox.get_number_of_cells(), mesh::EMPTY_CELL);
         std::vector<mesh::Cell<A>> new_elements(bbox.get_number_of_cells(), mesh::EMPTY_CELL);
@@ -716,7 +717,7 @@ public:
                 recv_load += count;
 
                 for(A &el : data_buf) {
-                    auto indexes = position_to_index(el.position[0],el.position[1],el.position[2], mesh::Cell<A>::get_cell_size());
+                    auto indexes = position_to_index(el.position[0],el.position[1],el.position[2], *grid_cell_size);
                     DataIndex ix = std::get<0>(indexes), iy = std::get<1>(indexes),iz = std::get<2>(indexes);
                     DataIndex lid = (ix - bbox.x_idx_min) + bbox.size_x * (iy - bbox.y_idx_min) + bbox.size_y * bbox.size_x * (iz - bbox.z_idx_min);
                     new_elements.at(lid).add(std::move(el));
