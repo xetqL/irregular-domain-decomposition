@@ -75,7 +75,7 @@ struct Domain {
         return {xmin(), xmax(), ymin(), ymax(), zmin(), zmax(), *grid_cell_size};
     }
 
-    Partition& get_my_partition(int rank);
+    Partition& get_partition(int rank);
 
     void bootstrap_partitions(unsigned int nb_partitions) {
         num_part = nb_partitions;

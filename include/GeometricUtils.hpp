@@ -63,7 +63,7 @@ struct Box3 {
     }
 
     friend std::ostream &operator<<(std::ostream &os, const Box3 &box3) {
-        os << "xmin: " << box3.xmin << " xmax: " << box3.xmax << " ymin: " << box3.ymin << " ymax: " << box3.ymax
+        os << std::setprecision(15) <<  "xmin: " << box3.xmin << " xmax: " << box3.xmax << " ymin: " << box3.ymin << " ymax: " << box3.ymax
            << " zmin: " << box3.zmin << " zmax: " << box3.zmax << " simsize_x: " << box3.simsize_x << " simsize_y: "
            << box3.simsize_y << " simsize_z: " << box3.simsize_z << " step: " << box3.step << " x_idx_min: "
            << box3.x_idx_min << " x_idx_max: " << box3.x_idx_max << " size_x: " << box3.size_x << " y_idx_min: "
@@ -81,13 +81,14 @@ private:
         x_idx_min = (type::DataIndex) (xmin / step);
         y_idx_min = (type::DataIndex) (ymin / step);
         z_idx_min = (type::DataIndex) (zmin / step);
-        x_idx_max = (type::DataIndex) ((xmax-step/2) / step);
-        y_idx_max = (type::DataIndex) ((ymax-step/2) / step);
-        z_idx_max = (type::DataIndex) ((zmax-step/2) / step);
 
-        size_x    = (x_idx_max - x_idx_min) + 1;
-        size_y    = (y_idx_max - y_idx_min) + 1;
-        size_z    = (z_idx_max - z_idx_min) + 1;
+        x_idx_max = (type::DataIndex) (xmax / step) - 1;
+        y_idx_max = (type::DataIndex) (ymax / step) - 1;
+        z_idx_max = (type::DataIndex) (zmax / step) - 1;
+
+        size_x    = (xmax / step);
+        size_y    = (ymax / step);
+        size_z    = (zmax / step);
     }
 };
 

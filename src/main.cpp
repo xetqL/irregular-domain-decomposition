@@ -111,7 +111,7 @@ int main(int argc, char** argv) {
     }
 
     d.bootstrap_partitions(world_size);
-    auto part = d.get_my_partition(my_rank);
+    auto part = d.get_partition(my_rank);
     part.init_communicators(world_size);
     lb::Box3 bbox(part.vertices, grid_params.get_grid_resolution());
     std::cout << bbox << std::endl;

@@ -143,27 +143,7 @@ public:
     typename std::vector<ContainedElement>::iterator end(){
         return elements.end();
     }
-/*
-    static IndexType& get_msx(){
-        static IndexType msx;
-        return msx;
-    }
 
-    static IndexType& get_msy(){
-        static IndexType msy;
-        return msy;
-    }
-
-    static IndexType& get_msz(){
-        static IndexType msz;
-        return msz;
-    }
-
-    static Real& get_cell_size(){
-        static Real size;
-        return size;
-    }
-*/
     friend bool operator==(const Cell &lhs, const Cell &rhs) {
         return lhs.gid == rhs.gid;
     }
@@ -175,8 +155,8 @@ public:
     friend std::ostream &operator<<(std::ostream &os, const Cell &cell) {
         Real x,y,z, cx, cy,cz;
         std::tie(cx,cy,cz) = cell.get_center();
-        //std::tie(x,y,z)    = cell.get_coordinates();
-        //os << "gid: " << cell.gid << " CENTER("<<cx<<";"<<cy<<";"<<cz <<")" << " COORD("<<x<<";"<<y<<";"<<z <<")" << " type: " << cell.type;
+        std::tie(x,y,z)    = cell.get_coordinates();
+        os <<std::setprecision(15)<< "gid: " << cell.gid << " CENTER("<<cx<<";"<<cy<<";"<<cz <<")" << " COORD("<<x<<";"<<y<<";"<<z <<")" << " type: " << cell.type;
         return os;
     }
 

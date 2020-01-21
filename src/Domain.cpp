@@ -6,7 +6,7 @@
 
 namespace lb {
 
-Partition& Domain::get_my_partition(int rank) {
+Partition& Domain::get_partition(int rank) {
     return partitions.at(rank);
 }
 
