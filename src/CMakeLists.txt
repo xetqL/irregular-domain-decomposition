@@ -1,5 +1,6 @@
 find_package(MPI)
 
+
 set(CMAKE_CXX_COMPILER ${MPI_CXX_COMPILER})
 
 find_package(CGAL)
@@ -43,7 +44,7 @@ IF(CMAKE_BUILD_TYPE MATCHES Debug)
     target_compile_definitions(adlbirreg PUBLIC DEBUG=True)
 ELSE()
     message("Optimization activated: -O3")
-    add_definitions("-O3")
+    add_definitions("-ftree-vectorize")
 ENDIF(CMAKE_BUILD_TYPE MATCHES Debug)
 
 IF(OUTPUTS MATCHES On)

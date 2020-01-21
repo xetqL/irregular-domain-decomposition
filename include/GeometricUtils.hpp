@@ -46,14 +46,14 @@ struct Box3 {
             if(p.y() > ymax) ymax = p.y();
             if(p.z() > zmax) zmax = p.z();
         }
+        //hook_to_grid();
         init();
     }
-
     Box3(Real xmin, Real xmax, Real ymin, Real ymax, Real zmin, Real zmax, Real step) :
-        xmin(xmin), xmax(xmax), ymin(ymin), ymax(ymax), zmin(zmin), zmax(zmax), step(step){
+            xmin(xmin), xmax(xmax), ymin(ymin), ymax(ymax), zmin(zmin), zmax(zmax), step(step){
+        //hook_to_grid();
         init();
     }
-
     DataIndex get_number_of_cells() {
         return (size_x) * (size_y) * (size_z);
     }
@@ -82,13 +82,23 @@ private:
         y_idx_min = (type::DataIndex) (ymin / step);
         z_idx_min = (type::DataIndex) (zmin / step);
 
-        x_idx_max = (type::DataIndex) (xmax / step) - 1;
-        y_idx_max = (type::DataIndex) (ymax / step) - 1;
-        z_idx_max = (type::DataIndex) (zmax / step) - 1;
+        x_idx_max = (type::DataIndex) (xmax / step);
+        y_idx_max = (type::DataIndex) (ymax / step);
+        z_idx_max = (type::DataIndex) (zmax / step);
 
-        size_x    = (xmax / step);
-        size_y    = (ymax / step);
-        size_z    = (zmax / step);
+        size_x    = std::round(simsize_x / step);
+        size_y    = std::round(simsize_y / step);
+        size_z    = std::round(simsize_z / step);
+    }
+
+    void hook_to_grid(){
+        xmin = std::round(xmin / step) * step;
+        ymin = std::round(ymin / step) * step;
+        zmin = std::round(zmin / step) * step;
+
+        xmax = std::round(xmax / step) * step;
+        ymax = std::round(ymax / step) * step;
+        zmax = std::round(zmax / step) * step;
     }
 };
 
@@ -113,7 +123,7 @@ inline std::tuple<DataIndex, DataIndex, DataIndex> cell_to_local_position(DataIn
     return {gidx - minx,  gidy - miny, gidz - minz};
 }
 
-inline void cell_to_local_position(DataIndex msx, DataIndex msy, DataIndex msz, Box3 bbox, DataIndex index, DataIndex* x_idx, DataIndex* y_idx, DataIndex* z_idx){
+inline void cell_to_local_position(DataIndex msx, DataIndex msy, DataIndex msz, const Box3& bbox, DataIndex index, DataIndex* x_idx, DataIndex* y_idx, DataIndex* z_idx){
 
     auto gidx = index % msx,
          gidy = (DataIndex) std::floor(index % (msx*msy) / msx),
@@ -168,14 +178,7 @@ inline std::tuple<DataIndex, DataIndex, DataIndex> position_to_index(const Real 
 
 template<class IndexType>
 inline IndexType grid_index_to_cell(IndexType x, IndexType y, IndexType z, const IndexType column, const IndexType row, const IndexType depth) {
-    const std::vector<IndexType> weight = {1, column, column*row};
-    IndexType idx = 0;
-
-    idx += x;
-    idx += column * y;
-    idx += column * row * z;
-
-    return idx;
+    return x + column * y + column * row * z;
 }
 
 /**

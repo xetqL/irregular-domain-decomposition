@@ -9,11 +9,16 @@
 #include <Communicator.hpp>
 #include "Types.hpp"
 #include <zupply.hpp>
+#include <ostream>
 
 namespace mesh {
 
 enum TCellType {REAL_CELL = 1, EMPTY_CELL=2, GHOST_CELL=3, UNITIALIZED_CELL=-1};
-type::DataIndex compute_lid(type::DataIndex msx, type::DataIndex msy, type::DataIndex msz, type::DataIndex gid, lb::Box3 bbox);
+inline type::DataIndex compute_lid(type::DataIndex msx, type::DataIndex msy, type::DataIndex msz, type::DataIndex gid, const lb::Box3& bbox){
+    type::DataIndex x, y, z;
+    lb::cell_to_local_position(msx, msy, msz, bbox, gid, &x, &y, &z);
+    return lb::grid_index_to_cell(x, y, z, bbox.size_x, bbox.size_y, bbox.size_z);
+}
 
 
 class GridParams {
@@ -50,6 +55,12 @@ public:
     }
     const type::DataIndex& msz() const {
         return max_size_z;
+    }
+
+    friend std::ostream &operator<<(std::ostream &os, const GridParams &params) {
+        os << "max_size_x: " << params.max_size_x << " max_size_y: " << params.max_size_y << " max_size_z: "
+           << params.max_size_z << " grid_resolution: " << params.grid_resolution;
+        return os;
     }
 };
 
@@ -98,7 +109,7 @@ public:
         return c;
     }
 
-    IndexType get_lid(IndexType msx, IndexType msy, IndexType msz, lb::Box3 bbox) {
+    inline IndexType get_lid(IndexType msx, IndexType msy, IndexType msz, const lb::Box3& bbox) {
         return mesh::compute_lid(msx, msy, msz, gid, bbox);
     }
 
@@ -159,7 +170,7 @@ public:
         os <<std::setprecision(15)<< "gid: " << cell.gid << " CENTER("<<cx<<";"<<cy<<";"<<cz <<")" << " COORD("<<x<<";"<<y<<";"<<z <<")" << " type: " << cell.type;
         return os;
     }
-
+/*
     lb::Box3 as_box(){
         Real x, y, z;
         std::tie(x, y, z) = get_coordinates();
@@ -167,7 +178,7 @@ public:
                 y, y+grid_params.get_grid_resolution(),
                 z, z+grid_params.get_grid_resolution(),
                      grid_params.get_grid_resolution()};
-    }
+    }*/
 
 };
 
@@ -196,8 +207,8 @@ std::vector<Cell<T>> generate_lattice_single_type(type::DataIndex msx, type::Dat
                                                   type::DataIndex cell_in_my_cols, type::DataIndex cell_in_my_rows, type::DataIndex cell_in_my_depth,
                                                   mesh::TCellType type) {
     using Cell = Cell<T>;
-    auto cell_per_process = cell_in_my_cols * cell_in_my_rows;
-    std::vector<Cell> my_cells; my_cells.reserve(cell_per_process);
+    auto cell_per_process = cell_in_my_cols * cell_in_my_rows * cell_in_my_depth;
+    std::vector<Cell> my_cells; my_cells.reserve(cell_per_process*2);
 
     auto x_shift = (cell_in_my_rows *  x_proc_idx);
     auto y_shift = (cell_in_my_cols *  y_proc_idx);

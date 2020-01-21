@@ -17,6 +17,9 @@ add_test(TestLinearHashMapUtils "${PROJECT_SOURCE_DIR}/test/TestLinearHashMapUti
 
 add_test(TestLocalIDComputation "${PROJECT_SOURCE_DIR}/test/TestLocalIDComputation")
 
+add_definitions("-march=native -ffast-math")
+
+
 target_link_libraries(TestLocalIDComputation gtest_main)
 target_link_libraries(TestLocalIDComputation ${CGAL_LIBS})
 target_link_libraries(TestLocalIDComputation ${MPI_C_LIBRARIES})
