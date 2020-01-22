@@ -29,7 +29,8 @@ inline int bitselect(int condition, int truereturnvalue, int falsereturnvalue) {
 namespace lb {
 
 struct GridElementComputer {
-    double compute_load(const std::vector<Cell>& elements){
+    double compute_load(const std::vector<Cell>& elements) {
+        if(elements.empty()) return 1.0;
         return std::accumulate(elements.cbegin(), elements.cend(), 1.0, [](double l, const Cell& e){return l + e.number_of_elements();});
     }
 
@@ -69,25 +70,28 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
+    const auto procs_x = params.xprocs,
+               procs_y = params.yprocs,
+               procs_z = params.zprocs;
+
     mesh::GridParams& grid_params = mesh::GridParams::get_instance();
 
-    grid_params.set_grid_resolution(6.25 * params.sig_lj * params.sig_lj);
+    grid_params.set_grid_resolution(2.5 * (params.sig_lj));
 
-    const type::Real DOMAIN_SIZE_X = grid_params.get_grid_resolution() * std::ceil(params.simsize_x / grid_params.get_grid_resolution());
-    std::cout << DOMAIN_SIZE_X << std::endl;
-    const type::Real DOMAIN_SIZE_Y = grid_params.get_grid_resolution() * std::ceil(params.simsize_y / grid_params.get_grid_resolution());
-    std::cout << DOMAIN_SIZE_Y << std::endl;
-    const type::Real DOMAIN_SIZE_Z = grid_params.get_grid_resolution() * std::ceil(params.simsize_z / grid_params.get_grid_resolution());
-    std::cout << DOMAIN_SIZE_Z << std::endl;
+    type::Real DOMAIN_SIZE_X;
+    type::Real DOMAIN_SIZE_Y;
+    type::Real DOMAIN_SIZE_Z;
+
+    lb::adjust_simulation_size(params.simsize_x,params.simsize_y,params.simsize_z,
+                               procs_x, procs_y, procs_z,
+                               grid_params.get_grid_resolution(),
+                               &DOMAIN_SIZE_X, &DOMAIN_SIZE_Y, &DOMAIN_SIZE_Z);
 
     grid_params.set_grid_dimensions(
             (type::DataIndex) (DOMAIN_SIZE_X / grid_params.get_grid_resolution()),
             (type::DataIndex) (DOMAIN_SIZE_Y / grid_params.get_grid_resolution()),
             (type::DataIndex) (DOMAIN_SIZE_Z / grid_params.get_grid_resolution()));
 
-    const auto procs_x = params.xprocs,
-               procs_y = params.yprocs,
-               procs_z = params.zprocs;
 
     const auto cell_in_my_rows  = grid_params.msx() / procs_x,
                cell_in_my_cols  = grid_params.msy() / procs_y,
@@ -99,6 +103,7 @@ int main(int argc, char** argv) {
     const auto msx = grid_params.msx();
     const auto msy = grid_params.msy();
     const auto msz = grid_params.msz();
+
     const auto total_cell_count =  grid_params.msx() * grid_params.msy() * grid_params.msz();
 
     lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z, &grid_params.get_grid_resolution());
@@ -127,7 +132,7 @@ int main(int argc, char** argv) {
                 &particles, params.sig_lj, 6.25 * params.sig_lj * params.sig_lj, params.T0, 0, 0, 0,
                 bbox.simsize_x, bbox.simsize_y, bbox.simsize_z
         );
-        auto elements_generators = init_generator(rejection_condition, 1, &params);
+        auto elements_generators = init_generator(rejection_condition, 1, &params, 1000000000);
         int cfg_idx = 0;
         while (!elements_generators.empty()) {
             std::cout << "Starting generation of particles with configuration ("
@@ -147,6 +152,7 @@ int main(int argc, char** argv) {
         cell.update_lid(domain.size_x, domain.size_y, domain.size_z, bbox);
         assert(cell.lid == i);
     }
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     auto stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);

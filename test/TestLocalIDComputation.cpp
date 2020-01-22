@@ -116,7 +116,7 @@ TEST(CellLocalID, areDifferent) {
     const int DOMAIN_SIZE_Y = 10;
     const int DOMAIN_SIZE_Z = 10;
 
-    gp.set_grid_dimensions(DOMAIN_SIZE_X / gp.get_grid_resolution(),DOMAIN_SIZE_Y / gp.get_grid_resolution(),DOMAIN_SIZE_Z / gp.get_grid_resolution());
+    gp.set_grid_dimensions(DOMAIN_SIZE_X / gp.get_grid_resolution(), DOMAIN_SIZE_Y / gp.get_grid_resolution(),DOMAIN_SIZE_Z / gp.get_grid_resolution());
 
     auto msx              = gp.msx();
     auto msy              = gp.msy();
@@ -241,24 +241,20 @@ TEST(Cell, areCoveringLID) {
         procs_z       = std::cbrt(worldsize);
     gp.set_grid_resolution(0.0625);
 
-    const type::Real _DOMAIN_SIZE_X = 10.625;
-    const type::Real _DOMAIN_SIZE_Y = 10.625;
-    const type::Real _DOMAIN_SIZE_Z = 10.625;
+    const type::Real _DOMAIN_SIZE_X = 15.625; type::Real DOMAIN_SIZE_X;
+    const type::Real _DOMAIN_SIZE_Y = 15.625; type::Real DOMAIN_SIZE_Y;
+    const type::Real _DOMAIN_SIZE_Z = 15.625; type::Real DOMAIN_SIZE_Z;
 
-    const type::Real DOMAIN_SIZE_X = std::ceil(_DOMAIN_SIZE_X / (procs_x * gp.get_grid_resolution()));
-    const type::Real DOMAIN_SIZE_Y = std::ceil(_DOMAIN_SIZE_Y / (procs_y * gp.get_grid_resolution()));
-    const type::Real DOMAIN_SIZE_Z = std::ceil(_DOMAIN_SIZE_Z / (procs_z * gp.get_grid_resolution()));
-
+    lb::adjust_simulation_size(_DOMAIN_SIZE_X,_DOMAIN_SIZE_Y,_DOMAIN_SIZE_Z,
+                               procs_x, procs_y, procs_z,
+                               gp.get_grid_resolution(),
+                               &DOMAIN_SIZE_X, &DOMAIN_SIZE_Y, &DOMAIN_SIZE_Z);
     gp.set_grid_dimensions(
             DOMAIN_SIZE_X / gp.get_grid_resolution(),
             DOMAIN_SIZE_Y / gp.get_grid_resolution(),
             DOMAIN_SIZE_Z / gp.get_grid_resolution());
 
-    std::cout << gp << std::endl;
-
     lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z, &gp.get_grid_resolution());
-
-
 
     auto cell_per_col = gp.msx() / procs_x;
 

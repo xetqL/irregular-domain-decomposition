@@ -9,6 +9,10 @@
 
 namespace lb {
 
+void adjust_simulation_size(type::Real _DOMAIN_SIZE_X, type::Real _DOMAIN_SIZE_Y, type::Real _DOMAIN_SIZE_Z,
+                            int procs_x, int procs_y, int procs_z,
+                            type::Real grid_resolution,
+                            type::Real* DOMAIN_SIZE_X, type::Real* DOMAIN_SIZE_Y, type::Real* DOMAIN_SIZE_Z);
 
 struct Domain {
 

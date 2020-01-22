@@ -208,8 +208,7 @@ std::vector<Cell<T>> generate_lattice_single_type(type::DataIndex msx, type::Dat
                                                   mesh::TCellType type) {
     using Cell = Cell<T>;
     auto cell_per_process = cell_in_my_cols * cell_in_my_rows * cell_in_my_depth;
-    std::vector<Cell> my_cells; my_cells.reserve(cell_per_process*2);
-
+    std::vector<Cell> my_cells; my_cells.reserve(cell_per_process);
     auto x_shift = (cell_in_my_rows *  x_proc_idx);
     auto y_shift = (cell_in_my_cols *  y_proc_idx);
     auto z_shift = (cell_in_my_depth * z_proc_idx);
@@ -222,7 +221,6 @@ std::vector<Cell<T>> generate_lattice_single_type(type::DataIndex msx, type::Dat
             }
         }
     }
-
     return my_cells;
 }
 

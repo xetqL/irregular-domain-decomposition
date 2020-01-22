@@ -260,7 +260,9 @@ public:
         auto all_loads = ::get_neighbors_load(my_load, neighborhood); //global load balancing with MPI_COMM_WORLD
         auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / N;
         auto max_load  =*std::max_element(all_loads.cbegin(), all_loads.cend());
+        std::cout << count << std::endl;
         MPI_Allreduce(&count, &b1, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+
         MPI_Allreduce(&count_cell, &b2, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
         return {b1, max_load, avg_load, my_load, (max_load / avg_load) - 1.0, (my_load / avg_load) - 1.0};
     }
@@ -616,10 +618,11 @@ public:
 
         int nb_to_migrate = 0, nb_to_keep = 0, nb_empty = 0;
         auto nb_elements = elements.size();
+        mesh::GridParams& gp = mesh::GridParams::get_instance();
         while(data_id < nb_elements) {
             auto point = elements[data_id].get_center_point();
             bool is_real_cell = this->contains(point);
-            elements[data_id].update_lid(domain.size_x, domain.size_y, domain.size_z, bbox);
+            //elements[data_id].update_lid(domain.size_x, domain.size_y, domain.size_z, bbox);
             if(!is_real_cell) { // it is not in my polygon
                 /* is it a REAL_CELL that must be migrated ? */
                 if(elements[data_id].type == mesh::REAL_CELL) {
@@ -641,17 +644,22 @@ public:
                 nb_empty++;
             } else { // contained by polygon but wrong local id
                 if(elements[data_id].type == mesh::REAL_CELL){
-                    auto lid = elements[data_id].lid;
+                    auto lid = elements[data_id].get_lid(gp.msx(), gp.msy(), gp.msz(), bbox);
                     new_elements.at(lid) = std::move(elements[data_id]); // put in the right position in the new array;
                     nb_to_keep++;
                 }
             }
             data_id++;
         }
+
         for(int i = 0; i < new_elements.size(); ++i) {
             auto cell = new_elements[i];
             //cell.update_lid(domain.size_x, domain.size_y, domain.size_z, bbox);
-            assert(cell.lid == i || cell.type != mesh::REAL_CELL);
+            if(i != cell.get_lid(gp.msx(), gp.msy(), gp.msz(), bbox)){
+                std::cout << cell << std::endl;
+                assert(cell.lid == i);
+            }
+
         }
 #ifdef DEBUG
         std::cout << my_rank << " transferred " << nb_migrate  << std::endl;
