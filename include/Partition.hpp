@@ -615,6 +615,8 @@ public:
         /* resize to my bounding box */
         //elements.resize(bbox.get_number_of_cells(), mesh::EMPTY_CELL);
         std::vector<mesh::Cell<A>> new_elements(bbox.get_number_of_cells(), mesh::EMPTY_CELL);
+        int i = 0;
+        for(Cell& c : new_elements) c.lid = i++;
 
         int nb_to_migrate = 0, nb_to_keep = 0, nb_empty = 0;
         auto nb_elements = elements.size();
@@ -645,7 +647,17 @@ public:
             } else { // contained by polygon but wrong local id
                 if(elements[data_id].type == mesh::REAL_CELL){
                     auto lid = elements[data_id].get_lid(gp.msx(), gp.msy(), gp.msz(), bbox);
-                    new_elements.at(lid) = std::move(elements[data_id]); // put in the right position in the new array;
+                    try{
+                        elements[data_id].lid = lid;
+                        new_elements.at(lid) = std::move(elements[data_id]);
+                    }catch(...){
+                        std::for_each(vertices.cbegin(), vertices.cend(), [&](auto val){std::cout << val << std::endl;});
+                        std::cout << elements[data_id] << std::endl;
+                        std::cout << bbox << std::endl;
+                    }
+                    
+                    
+                    // put in the right position in the new array;
                     nb_to_keep++;
                 }
             }
@@ -655,9 +667,9 @@ public:
         for(int i = 0; i < new_elements.size(); ++i) {
             auto cell = new_elements[i];
             //cell.update_lid(domain.size_x, domain.size_y, domain.size_z, bbox);
-            if(i != cell.get_lid(gp.msx(), gp.msy(), gp.msz(), bbox)){
+            if(i != cell.lid) {
                 std::cout << cell << std::endl;
-                assert(cell.lid == i);
+                throw std::runtime_error("lol?");
             }
 
         }
@@ -705,11 +717,15 @@ public:
 
                 /* create cell to hold elements */
                 for(DataIndex gid : gids_buf) {
-                    Cell c(gid, domain.size_x, domain.size_y, domain.size_z, bbox, mesh::REAL_CELL);
-                    auto lid = mesh::compute_lid(domain.size_x, domain.size_y, domain.size_z, gid, bbox);
-                    std::cout << my_rank << " "<< bbox << std::endl;
+                    Cell c(gid, gp.msx(), gp.msy(), gp.msz(), bbox, mesh::REAL_CELL);
+                    auto lid = c.get_lid(gp.msx(), gp.msy(), gp.msz(), bbox);//mesh::compute_lid(domain.size_x, domain.size_y, domain.size_z, gid, bbox);
+                    if(lid >= new_elements.size()){
+                        std::cout << bbox << std::endl;
+                        std::cout << c << std::endl;
+                        throw std::runtime_error("out of bound");
+                    }
                     //assert(new_elements.at(lid).type != mesh::REAL_CELL);
-                    new_elements.emplace(new_elements.begin() + lid, gid, domain.size_x, domain.size_y, domain.size_z, bbox, mesh::REAL_CELL);
+                    new_elements.emplace(new_elements.begin() + lid, gid, gp.msx(), gp.msy(), gp.msz(), bbox, mesh::REAL_CELL);
                 }
 
             }
