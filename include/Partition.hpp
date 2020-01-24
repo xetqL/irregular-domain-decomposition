@@ -48,7 +48,8 @@ int translate_iteration_to_vertex_group(int physical_iteration, lb::Point_3 coor
 class Partition {
 public:
 
-    const Box3 domain;
+    //const Box3 domain;
+    mesh::GridParams& grid_params = mesh::GridParams::get_instance();
     const Real* grid_cell_size;
     Point_3 coord;
 
@@ -62,7 +63,20 @@ public:
     Partition(Point_3 coord, const Box3& domain, const Real* grid_cell_size,
               Point_3 v1, Point_3 v2, Point_3 v3, Point_3 v4,
               Point_3 v5, Point_3 v6, Point_3 v7, Point_3 v8)
-            : domain(domain), grid_cell_size(grid_cell_size), coord(std::move(coord)),
+            : grid_cell_size(grid_cell_size), coord(std::move(coord)),
+              vertices({std::move(v1), std::move(v2), std::move(v3), std::move(v4),
+                        std::move(v5), std::move(v6), std::move(v7), std::move(v8)}){
+        get_MPI_worldsize(num_part);
+        for(int j = 0; j < 8; ++j){
+            vertices_id[j] = get_vertex_id<int>(vertices[j], num_part);
+        }
+        update();
+    }
+
+    Partition(Point_3 coord, const Real* grid_cell_size,
+              Point_3 v1, Point_3 v2, Point_3 v3, Point_3 v4,
+              Point_3 v5, Point_3 v6, Point_3 v7, Point_3 v8)
+            : grid_cell_size(grid_cell_size), coord(std::move(coord)),
               vertices({std::move(v1), std::move(v2), std::move(v3), std::move(v4),
                         std::move(v5), std::move(v6), std::move(v7), std::move(v8)}){
         get_MPI_worldsize(num_part);
@@ -75,7 +89,18 @@ public:
     template<class InputIterator>
     Partition(Point_3 coord, const Box3& domain, const Real* grid_cell_size,
               InputIterator beg)
-            : domain(domain), grid_cell_size(grid_cell_size), coord(std::move(coord)),
+            : grid_cell_size(grid_cell_size), coord(std::move(coord)),
+              vertices(deserialize(beg)) {
+        get_MPI_worldsize(num_part);
+        for(int j = 0; j < 8; ++j)
+            vertices_id[j] = get_vertex_id<int>(vertices[j], num_part);
+        update();
+    }
+
+    template<class InputIterator>
+    Partition(Point_3 coord, const Real* grid_cell_size,
+              InputIterator beg)
+            : grid_cell_size(grid_cell_size), coord(std::move(coord)),
               vertices(deserialize(beg)) {
         get_MPI_worldsize(num_part);
         for(int j = 0; j < 8; ++j)
@@ -329,7 +354,12 @@ public:
 
             //std::cout << "LOADS: " << loads.size() << std::endl;
             auto f1  = -get_vertex_force(v, cls.second, normalized_loads);
-            auto f1_after = constraint_force(domain, v, f1);
+            auto f1_after = constraint_force(0.0, 0.0, 0.0,
+                                             grid_params.get_maximum_simulation_size_x(),
+                                             grid_params.get_maximum_simulation_size_y(),
+                                             grid_params.get_maximum_simulation_size_z(),
+
+                                             v, f1);
 #ifdef DEBUG
             std::cout << my_rank << " vertex force is "<< f1_after << std::endl;
 #endif
@@ -407,7 +437,10 @@ public:
                 std::transform(loads.cbegin(), loads.cend(), std::back_inserter(normalized_loads), [&avg_load](auto n){return n/avg_load;});
                 auto cls = (*search_in_linear_hashmap<VertexIndex, std::vector<Point_3>, 8>(all_cl, vid)).second;
                 auto f1  = -get_vertex_force(v, cls, normalized_loads);
-                auto f1_after = constraint_force(domain, v, f1);
+                auto f1_after = constraint_force(0.0, 0.0, 0.0,
+                                                 grid_params.get_maximum_simulation_size_x(), grid_params.get_maximum_simulation_size_y(),
+                                                 grid_params.get_maximum_simulation_size_z(),
+                                                 v, f1);
                 int are_all_valid = false;
                 for(int trial = 0; trial < MAX_TRIAL; ++trial) {
                     auto new_vertices = vertices;
@@ -463,7 +496,7 @@ public:
         {
             int i = 0;
             for(ProcRank neighbor_rank : active_neighbors) {
-                MPI_Isend(my_domain.data(), 24, MPI_TYPE_REAL, neighbor_rank, 9999, MPI_COMM_WORLD, &srequests[i]);
+                MPI_Isend(my_domain.data(),            24, MPI_TYPE_REAL, neighbor_rank, 9999, MPI_COMM_WORLD, &srequests[i]);
                 MPI_Irecv((recv_buff.data() + i * 24), 24, MPI_TYPE_REAL, neighbor_rank, 9999, MPI_COMM_WORLD, &rrequests[i]);
                 i++;
             }
@@ -475,7 +508,7 @@ public:
         std::vector<Partition> neighborhoods;
         for(int i = 0; i < number_of_neighbors; ++i) {
             // building neighborhood of vertex
-            neighborhoods.emplace_back(coord, domain, grid_cell_size, (recv_buff.begin() + i * 24));
+            neighborhoods.emplace_back(coord, grid_cell_size, (recv_buff.begin() + i * 24));
         }
 
         //TAG MY DATA
@@ -602,7 +635,7 @@ public:
         std::vector<Partition> neighborhoods;
         for(int i = 0; i < number_of_neighbors; ++i) {
             // building neighborhood of vertex
-            neighborhoods.emplace_back(coord, domain, grid_cell_size, (recv_buff.begin() + i * 24));
+            neighborhoods.emplace_back(coord, grid_cell_size, (recv_buff.begin() + i * 24));
         }
 
         auto logger = zz::log::get_logger("default", true);
@@ -620,7 +653,6 @@ public:
 
         int nb_to_migrate = 0, nb_to_keep = 0, nb_empty = 0;
         auto nb_elements = elements.size();
-        mesh::GridParams& gp = mesh::GridParams::get_instance();
         while(data_id < nb_elements) {
             auto point = elements[data_id].get_center_point();
             bool is_real_cell = this->contains(point);
@@ -641,22 +673,26 @@ public:
                             }
                         }
                     }
-                    if(!found) throw std::runtime_error("Real cell must belong to someone");
+                    if(!found){
+                        std::cout << elements[data_id] << std::endl;
+                        dbg_out();
+                        throw std::runtime_error("Real cell must belong to someone");
+                    }
                 }
                 nb_empty++;
             } else { // contained by polygon but wrong local id
                 if(elements[data_id].type == mesh::REAL_CELL){
-                    auto lid = elements[data_id].get_lid(gp.msx(), gp.msy(), gp.msz(), bbox);
+                    auto lid = elements[data_id].get_lid(grid_params.get_cell_number_x(), grid_params.get_cell_number_y(), grid_params.get_cell_number_z(), bbox);
                     try{
                         elements[data_id].lid = lid;
                         new_elements.at(lid) = std::move(elements[data_id]);
                     }catch(...){
-                        std::for_each(vertices.cbegin(), vertices.cend(), [&](auto val){std::cout << val << std::endl;});
                         std::cout << elements[data_id] << std::endl;
                         std::cout << bbox << std::endl;
+                        dbg_out();
+                        std::cout << grid_params << std::endl;
+                        throw std::runtime_error(std::to_string(lid) + " " + std::to_string(new_elements.size()));
                     }
-                    
-                    
                     // put in the right position in the new array;
                     nb_to_keep++;
                 }
@@ -717,15 +753,15 @@ public:
 
                 /* create cell to hold elements */
                 for(DataIndex gid : gids_buf) {
-                    Cell c(gid, gp.msx(), gp.msy(), gp.msz(), bbox, mesh::REAL_CELL);
-                    auto lid = c.get_lid(gp.msx(), gp.msy(), gp.msz(), bbox);//mesh::compute_lid(domain.size_x, domain.size_y, domain.size_z, gid, bbox);
+                    Cell c(gid, grid_params.get_cell_number_x(), grid_params.get_cell_number_y(), grid_params.get_cell_number_z(), bbox, mesh::REAL_CELL);
+                    auto lid = c.get_lid(grid_params.get_cell_number_x(), grid_params.get_cell_number_y(), grid_params.get_cell_number_z(), bbox);//mesh::compute_lid(domain.size_x, domain.size_y, domain.size_z, gid, bbox);
                     if(lid >= new_elements.size()){
                         std::cout << bbox << std::endl;
                         std::cout << c << std::endl;
                         throw std::runtime_error("out of bound");
                     }
                     //assert(new_elements.at(lid).type != mesh::REAL_CELL);
-                    new_elements.emplace(new_elements.begin() + lid, gid, gp.msx(), gp.msy(), gp.msz(), bbox, mesh::REAL_CELL);
+                    new_elements.emplace(new_elements.begin() + lid, gid, grid_params.get_cell_number_x(), grid_params.get_cell_number_y(), grid_params.get_cell_number_z(), bbox, mesh::REAL_CELL);
                 }
 
             }
@@ -760,128 +796,10 @@ public:
         return neighbor_ghosts;
     }
 
-    /*template<class A>
-    void move_data(std::vector<mesh::Cell<A>>& elements) {
-        get_MPI_rank(my_rank);
-        get_MPI_worldsize(worldsize);
-        const auto my_domain = this->serialize();
-        const auto number_of_neighbors = worldsize;
-        std::vector<int> active_neighbors(worldsize);
-        std::iota(active_neighbors.begin(), active_neighbors.end(), 0);
-
-        std::vector<std::pair<ProcRank, std::vector<mesh::Cell<A>>>>  migration_and_destination(number_of_neighbors);
-        std::vector<std::pair<ProcRank, std::vector<DataIndex>>>      gid_and_destination(number_of_neighbors);
-        std::vector<std::pair<ProcRank, std::vector<DataIndex>>>      neighbor_ghosts(number_of_neighbors);
-
-        std::transform(active_neighbors.begin(), active_neighbors.end(), migration_and_destination.begin(),
-                       [](ProcRank i){ return std::make_pair(i, std::vector<mesh::Cell<A>>()); });
-        std::transform(active_neighbors.begin(), active_neighbors.end(), gid_and_destination.begin(),
-                       [](ProcRank i){ return std::make_pair(i, std::vector<DataIndex>()); });
-        std::transform(active_neighbors.begin(), active_neighbors.end(), neighbor_ghosts.begin(),
-                       [](ProcRank i){ return std::make_pair(i, std::vector<DataIndex>()); });
-
-        std::vector<Real> recv_buff(active_neighbors.size()*8*3);
-        std::vector<MPI_Request> srequests(active_neighbors.size()), rrequests(active_neighbors.size());
-
-        {
-            int i = 0;
-            for(ProcRank neighbor_rank : active_neighbors) {
-                MPI_Isend(my_domain.data(), 24, MPI_TYPE_REAL, neighbor_rank, 9999, MPI_COMM_WORLD, &srequests[i]);
-                MPI_Irecv((recv_buff.data() + i * 24), 24, MPI_TYPE_REAL, neighbor_rank, 9999, MPI_COMM_WORLD, &rrequests[i]);
-                i++;
-            }
-        }
-
-        MPI_Waitall(number_of_neighbors, rrequests.data(), MPI_STATUSES_IGNORE);
-        MPI_Waitall(number_of_neighbors, srequests.data(), MPI_STATUSES_IGNORE);
-
-        std::vector<Partition> neighborhoods;
-        for(int i = 0; i < number_of_neighbors; ++i) {
-            // building neighborhood of vertex
-            neighborhoods.emplace_back(coord, d, grid_cell_size, (recv_buff.begin() + i * 24));
-        }
-
-        //TAG MY DATA
-        //const auto nb_elements = elements.size();
-        size_t data_id = 0;
-        size_t nb_migrate = 0;
-        while(data_id < elements.size()) {
-            auto point = elements[data_id].get_center_point();
-            for(int nid = 0; nid < number_of_neighbors; ++nid) {
-                const auto neighbor_rank = migration_and_destination[nid].first;
-                if(neighbor_rank < 0 || neighbor_rank == my_rank) continue;
-                const auto& neighborhood_domains = neighborhoods[nid];
-                if(neighborhood_domains.contains(point)) {
-                    migration_and_destination[nid].second.push_back(std::move(elements[data_id]));
-                    std::iter_swap(elements.begin() + data_id, elements.end() - 1);
-                    elements.pop_back();
-                    nb_migrate++;
-                    break;
-                }
-            }
-            data_id++;
-        }
-
-        CommunicationDatatype datatype = A::register_datatype();
-        {
-
-            //migrate the data
-            std::vector<MPI_Request> srequests(2*number_of_neighbors);
-            for(int nid = 0; nid < number_of_neighbors; ++nid) {
-                int dest_rank = migration_and_destination[nid].first;
-                std::vector<mesh::Cell<A>>& scells     = migration_and_destination[nid].second;
-                std::vector<DataIndex> gids(scells.size());
-                auto array_size = scells.size();
-                size_t nb_elements = 0;
-                for(size_t i = 0; i < array_size; ++i) {
-                    gids[i] = scells[i].gid;
-                    nb_elements += scells[i].get_number_of_elements();
-                }
-                std::vector<A> sdata;sdata.reserve(nb_elements);
-                for(size_t i = 0; i < array_size; ++i) {
-                    sdata.insert(sdata.begin(),
-                                 std::make_move_iterator(scells[i].elements.begin()),
-                                 std::make_move_iterator(scells[i].elements.end()));
-                }
-#ifdef DEBUG
-                assert(migration_and_destination[nid].second.size() == 0 || dest_rank != my_rank);
-#endif
-                MPI_Isend(sdata.data(), sdata.size(), datatype.element_datatype, dest_rank, 101010, MPI_COMM_WORLD, &srequests[2*nid]);
-                MPI_Isend(gids.data(),   gids.size(), MPI_TYPE_DATA_INDEX,       dest_rank, 101011, MPI_COMM_WORLD, &srequests[2*nid+1]);
-
-            }
-
-            std::vector<A> data_buf;
-            std::vector<DataIndex > gids_buf;
-            Real recv_load = 0;
-            int count;
-            MPI_Status status;
-            for(int nid = 0; nid < number_of_neighbors; ++nid) {
-                int dest_rank = migration_and_destination[nid].first;
-
-                MPI_Probe(dest_rank, 101011, MPI_COMM_WORLD, &status);
-                MPI_Get_count(&status, MPI_TYPE_DATA_INDEX,  &count);
-                gids_buf.resize(count);
-                MPI_Recv(gids_buf.data(), count, MPI_TYPE_DATA_INDEX, dest_rank, 101011, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-                MPI_Probe(dest_rank, 101010, MPI_COMM_WORLD, &status);
-                MPI_Get_count(&status, MPI_TYPE_DATA_INDEX,  &count);
-                data_buf.resize(count);
-                MPI_Recv(data_buf.data(), count, datatype.element_datatype, dest_rank, 101010, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-                recv_load += count;
-            }
-#ifdef DEBUG
-            std::cout << my_rank << " received " << recv_load << std::endl;
-#endif
-            MPI_Waitall(number_of_neighbors, srequests.data(), MPI_STATUSES_IGNORE);
-        }
-    }
-    */
     template<class NumericalType>
     const NumericalType get_vertex_id(const Point_3& v, int N) const {
         auto vertices_per_row = (NumericalType) std::cbrt(N)+1;
-        const Real step = (domain.xmax - domain.xmin) / (vertices_per_row);
+        const Real step = grid_params.get_maximum_simulation_size_x() / (vertices_per_row);
         return (v.x() / step) + vertices_per_row * v.z() / step  + vertices_per_row * vertices_per_row * v.y() / step;
     }
 
@@ -923,6 +841,15 @@ public:
            << " ID(" << partition.vertices_id[6] << "): " << partition.vertices[6]
            << " ID(" << partition.vertices_id[7] << "): " << partition.vertices[7];
         return os;
+    }
+
+    void dbg_out(){
+        std::cout <<
+        "std::array<lb::Point_3, 8> vertices = {\n";
+        for (auto v : vertices) {
+            std::cout << "lb::Point_3(" << v.x() << "," << v.y() << ", "<< v.z() << "),\n";
+        }
+        std::cout << "};"<< std::endl;
     }
 };
 

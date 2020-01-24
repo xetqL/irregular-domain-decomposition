@@ -20,10 +20,11 @@ inline type::DataIndex compute_lid(type::DataIndex msx, type::DataIndex msy, typ
     return lb::grid_index_to_cell(x, y, z, bbox.size_x, bbox.size_y, bbox.size_z);
 }
 
-
 class GridParams {
-    type::DataIndex max_size_x, max_size_y, max_size_z;
-    type::Real    grid_resolution;
+    type::DataIndex max_cell_index_x, max_cell_index_y, max_cell_index_z,
+                    cell_number_x, cell_number_y, cell_number_z;
+    type::Real      grid_resolution;
+    type::Real      simulation_size_x, simulation_size_y, simulation_size_z;
     GridParams(){};
 public:
     static GridParams& get_instance() {
@@ -38,28 +39,60 @@ public:
         grid_resolution = _grid_resolution;
     }
 
-    void set_grid_dimensions(type::DataIndex _msx, type::DataIndex _msy, type::DataIndex _msz){
-        max_size_x = _msx;
-        max_size_y = _msy;
-        max_size_z = _msz;
+    void set_grid_index_dimensions(type::DataIndex _msx, type::DataIndex _msy, type::DataIndex _msz){
+        cell_number_x = _msx;
+        cell_number_y = _msy;
+        cell_number_z = _msz;
+        max_cell_index_x = _msx-1;
+        max_cell_index_y = _msy-1;
+        max_cell_index_z = _msz-1;
+    }
+
+    void set_simulation_dimension(type::Real msx, type::Real msy, type::Real msz){
+        simulation_size_x = msx;
+        simulation_size_y = msy;
+        simulation_size_z = msz;
+    }
+
+    const type::DataIndex get_cell_number_x() const {
+        return cell_number_x;
+    }
+
+    const type::DataIndex get_cell_number_y() const {
+        return cell_number_y;
+    }
+
+    const type::DataIndex get_cell_number_z() const {
+        return cell_number_z;
     }
 
     const type::Real& get_grid_resolution() const {
         return grid_resolution;
     }
-    const type::DataIndex& msx() const {
-        return max_size_x;
+    const type::DataIndex get_maximum_index_x() const {
+        return max_cell_index_x;
     }
-    const type::DataIndex& msy() const {
-        return max_size_y;
+    const type::DataIndex get_maximum_index_y() const {
+        return max_cell_index_y;
     }
-    const type::DataIndex& msz() const {
-        return max_size_z;
+    const type::DataIndex get_maximum_index_z() const {
+        return max_cell_index_z;
+    }
+    const type::Real get_maximum_simulation_size_x() const {
+        return simulation_size_x;
+    }
+    const type::Real get_maximum_simulation_size_y() const {
+        return simulation_size_y;
+    }
+    const type::Real get_maximum_simulation_size_z() const {
+        return simulation_size_z;
     }
 
     friend std::ostream &operator<<(std::ostream &os, const GridParams &params) {
-        os << "max_size_x: " << params.max_size_x << " max_size_y: " << params.max_size_y << " max_size_z: "
-           << params.max_size_z << " grid_resolution: " << params.grid_resolution;
+        os << "max_cell_index_x: " << params.max_cell_index_x << " max_cell_index_y: " << params.max_cell_index_y
+           << " max_cell_index_z: " << params.max_cell_index_z << " grid_resolution: " << params.grid_resolution
+           << " simulation_size_x: " << params.simulation_size_x << " simulation_size_y: " << params.simulation_size_y
+           << " simulation_size_z: " << params.simulation_size_z;
         return os;
     }
 };
@@ -105,7 +138,7 @@ public:
         x+=bbox.x_idx_min;
         y+=bbox.y_idx_min;
         z+=bbox.z_idx_min;
-        c.gid = lb::grid_index_to_cell(x, y, z, grid_params.msx(), grid_params.msy(), grid_params.msz());
+        c.gid = lb::grid_index_to_cell(x, y, z, grid_params.get_cell_number_x(), grid_params.get_cell_number_y(), grid_params.get_cell_number_z());
         return c;
     }
 
@@ -123,19 +156,19 @@ public:
 
     std::tuple<Real, Real, Real> get_center() const {
         IndexType x, y, z;
-        lb::linear_to_grid(gid, grid_params.msx(), grid_params.msy(), x, y, z); //cell_to_global_position(msx, msy, gid);
+        lb::linear_to_grid(gid, grid_params.get_cell_number_x(), grid_params.get_cell_number_y(), x, y, z); //cell_to_global_position(msx, msy, gid);
         return std::make_tuple(x*grid_params.get_grid_resolution()+grid_params.get_grid_resolution()/2.0, y*grid_params.get_grid_resolution()+grid_params.get_grid_resolution()/2.0, z*grid_params.get_grid_resolution()+grid_params.get_grid_resolution()/2.0);
     }
 
     lb::Point_3 get_center_point() const {
         IndexType x, y, z;
-        lb::linear_to_grid(gid, grid_params.msx(), grid_params.msy(), x, y, z); //cell_to_global_position(msx, msy, gid);
+        lb::linear_to_grid(gid, grid_params.get_cell_number_x(), grid_params.get_cell_number_y(), x, y, z); //cell_to_global_position(msx, msy, gid);
         return {x*grid_params.get_grid_resolution()+grid_params.get_grid_resolution()/2.0, y*grid_params.get_grid_resolution()+grid_params.get_grid_resolution()/2.0, z*grid_params.get_grid_resolution()+grid_params.get_grid_resolution()/2.0};
     }
 
     std::tuple<Real, Real, Real> get_coordinates() const {
         IndexType x, y, z;
-        lb::linear_to_grid(gid, grid_params.msx(), grid_params.msy(), x, y, z); //cell_to_global_position(msx, msy, gid);
+        lb::linear_to_grid(gid, grid_params.get_cell_number_x(), grid_params.get_cell_number_y(), x, y, z); //cell_to_global_position(msx, msy, gid);
         return std::make_tuple(x, y, z);
     }
 
@@ -191,21 +224,31 @@ void insert_or_remove(std::vector<Cell<T>>* _cells, std::vector<T>* _elements, l
     for(T& el : elements) {
         if(bbox.contains(el.position[0], el.position[1], el.position[2])) {
             //migrate the data
-            auto indexes = lb::position_to_index(el.position[0],el.position[1],el.position[2], grid_params.get_grid_resolution());
-            type::DataIndex ix = std::get<0>(indexes), iy = std::get<1>(indexes), iz = std::get<2>(indexes);
+            auto indexes = lb::position_to_index(el.position[0], el.position[1], el.position[2], grid_params.get_grid_resolution());
+            type::DataIndex ix  = std::get<0>(indexes), iy = std::get<1>(indexes), iz = std::get<2>(indexes);
             type::DataIndex lid = (ix - bbox.x_idx_min) + bbox.size_x * (iy - bbox.y_idx_min) + bbox.size_y * bbox.size_x * (iz - bbox.z_idx_min);
-            cells.at(lid).add(el);
+            try {
+                cells.at(lid).add(el);
+
+            } catch(...) {
+                std::cout << ix << " "<< iy<<" " <<iz << std::endl;
+                std::cout << bbox << std::endl;
+                std::cout << el << std::endl;
+                throw;
+            }
             nbp++;
         }
     }
     std::cout << "Number of particle added: " << nbp << "/" << elements.size()<<  std::endl;
     elements.clear();
 }
+
 template<class T>
 std::vector<Cell<T>> generate_lattice_single_type(type::DataIndex msx, type::DataIndex msy, type::DataIndex msz,
                                                   type::DataIndex x_proc_idx, type::DataIndex y_proc_idx, type::DataIndex z_proc_idx,
                                                   type::DataIndex cell_in_my_cols, type::DataIndex cell_in_my_rows, type::DataIndex cell_in_my_depth,
                                                   mesh::TCellType type) {
+
     using Cell = Cell<T>;
     auto cell_per_process = cell_in_my_cols * cell_in_my_rows * cell_in_my_depth;
     std::vector<Cell> my_cells; my_cells.reserve(cell_per_process);

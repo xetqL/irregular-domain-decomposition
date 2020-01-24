@@ -102,7 +102,6 @@ public:
         int virtual_rank = world_to_comm.at(world_rank) ^ world_to_comm.at(root);
         int dim   = std::ceil(std::log2(comm_to_world.size()));
         int mask = (int) std::pow(2, dim) - 1;
-
         for(int i = 0; i < dim; ++i) {
             mask = mask ^ ((int) std::pow(2, i));
             if((virtual_rank & mask) == 0) {

@@ -78,33 +78,33 @@ int main(int argc, char** argv) {
 
     grid_params.set_grid_resolution(2.5 * (params.sig_lj));
 
-    type::Real DOMAIN_SIZE_X;
-    type::Real DOMAIN_SIZE_Y;
-    type::Real DOMAIN_SIZE_Z;
+    type::Real DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z;
 
     lb::adjust_simulation_size(params.simsize_x,params.simsize_y,params.simsize_z,
                                procs_x, procs_y, procs_z,
                                grid_params.get_grid_resolution(),
                                &DOMAIN_SIZE_X, &DOMAIN_SIZE_Y, &DOMAIN_SIZE_Z);
 
-    grid_params.set_grid_dimensions(
-            (type::DataIndex) (DOMAIN_SIZE_X / grid_params.get_grid_resolution()),
-            (type::DataIndex) (DOMAIN_SIZE_Y / grid_params.get_grid_resolution()),
-            (type::DataIndex) (DOMAIN_SIZE_Z / grid_params.get_grid_resolution()));
+    grid_params.set_grid_index_dimensions((type::DataIndex) (DOMAIN_SIZE_X / grid_params.get_grid_resolution()),
+                                          (type::DataIndex) (DOMAIN_SIZE_Y / grid_params.get_grid_resolution()),
+                                          (type::DataIndex) (DOMAIN_SIZE_Z / grid_params.get_grid_resolution()));
 
+    grid_params.set_simulation_dimension((DOMAIN_SIZE_X), (DOMAIN_SIZE_Y), (DOMAIN_SIZE_Z));
 
-    const auto cell_in_my_rows  = grid_params.msx() / procs_x,
-               cell_in_my_cols  = grid_params.msy() / procs_y,
-               cell_in_my_depth = grid_params.msz() / procs_z;
+    const auto cell_in_my_rows  = grid_params.get_cell_number_x() / procs_x,
+               cell_in_my_cols  = grid_params.get_cell_number_y() / procs_y,
+               cell_in_my_depth = grid_params.get_cell_number_z() / procs_z;
 
     const auto cell_per_process = cell_in_my_rows * cell_in_my_cols * cell_in_my_depth,
                MAX_ITER = (type::DataIndex) params.MAX_STEP;
 
-    const auto msx = grid_params.msx();
-    const auto msy = grid_params.msy();
-    const auto msz = grid_params.msz();
+    const auto msx = grid_params.get_cell_number_x();
+    const auto msy = grid_params.get_cell_number_y();
+    const auto msz = grid_params.get_cell_number_z();
 
-    const auto total_cell_count =  grid_params.msx() * grid_params.msy() * grid_params.msz();
+    const auto total_cell_count =  grid_params.get_cell_number_x() *
+                                   grid_params.get_cell_number_y() *
+                                   grid_params.get_cell_number_z();
 
     lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z, &grid_params.get_grid_resolution());
 
@@ -120,17 +120,20 @@ int main(int argc, char** argv) {
     part.init_communicators(world_size);
     lb::Box3 bbox(part.vertices, grid_params.get_grid_resolution());
     std::cout << bbox << std::endl;
-    auto domain = d.get_bounding_box();
+    //auto domain = d.get_bounding_box();
     type::DataIndex x_proc_idx, y_proc_idx, z_proc_idx;
     lb::linear_to_grid(my_rank, procs_x, procs_y, x_proc_idx, y_proc_idx, z_proc_idx);
 
-    std::vector<Cell> my_cells = mesh::generate_lattice_single_type<Particle>(msx, msy, msz, x_proc_idx, y_proc_idx, z_proc_idx, cell_in_my_cols, cell_in_my_rows, cell_in_my_depth, mesh::TCellType::REAL_CELL);
+    std::vector<Cell> my_cells = mesh::generate_lattice_single_type<Particle>(
+            msx, msy, msz, x_proc_idx, y_proc_idx, z_proc_idx,
+            cell_in_my_cols, cell_in_my_rows, cell_in_my_depth,
+            mesh::TCellType::REAL_CELL);
 
     std::vector<Particle> particles;
     if(!rank) {
         auto rejection_condition = std::make_shared<initial_condition::lennard_jones::RejectionCondition<DIMENSION>>(
                 &particles, params.sig_lj, 6.25 * params.sig_lj * params.sig_lj, params.T0, 0, 0, 0,
-                bbox.simsize_x, bbox.simsize_y, bbox.simsize_z
+                DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z
         );
         auto elements_generators = init_generator(rejection_condition, 1, &params, 1000000000);
         int cfg_idx = 0;
@@ -149,7 +152,9 @@ int main(int argc, char** argv) {
 
     for(int i = 0; i < my_cells.size(); ++i) {
         auto cell = my_cells[i];
-        cell.update_lid(domain.size_x, domain.size_y, domain.size_z, bbox);
+        cell.update_lid(grid_params.get_cell_number_x(),
+                        grid_params.get_cell_number_y(),
+                        grid_params.get_cell_number_z(), bbox);
         assert(cell.lid == i);
     }
 
@@ -211,7 +216,7 @@ int main(int argc, char** argv) {
 
         /* Compute maximum workload among neighborhood */
         for(int com_id = 0; com_id < 8; com_id++) {
-            auto vid = part.vertices_id[com];
+            int vid = part.vertices_id[com];
             const auto& communicator = part.vertex_neighborhood[vid];
             std::vector<double> comm_workloads(communicator.comm_size, 0);
             communicator.Allgather(&workload, 1, MPI_DOUBLE, comm_workloads.data(), 1, MPI_DOUBLE, vid);

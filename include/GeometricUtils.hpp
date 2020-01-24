@@ -29,13 +29,14 @@ struct Box3 {
     Real xmin=std::numeric_limits<Real>::max(),xmax=std::numeric_limits<Real>::min(),
          ymin=std::numeric_limits<Real>::max(),ymax=std::numeric_limits<Real>::min(),
          zmin=std::numeric_limits<Real>::max(),zmax=std::numeric_limits<Real>::min();
+
     Real simsize_x, simsize_y, simsize_z;
 
     Real step;
 
-    DataIndex x_idx_min,x_idx_max,size_x,
-              y_idx_min,y_idx_max,size_y,
-              z_idx_min,z_idx_max,size_z;
+    DataIndex x_idx_min, x_idx_max,size_x,
+              y_idx_min, y_idx_max,size_y,
+              z_idx_min, z_idx_max,size_z;
 
     Box3 (const std::array<Point_3, 8>& vertices, Real step) : step(step) {
         for(const Point_3& p : vertices) {
@@ -46,12 +47,12 @@ struct Box3 {
             if(p.y() > ymax) ymax = p.y();
             if(p.z() > zmax) zmax = p.z();
         }
-        //hook_to_grid();
+        hook_to_grid();
         init();
     }
     Box3(Real xmin, Real xmax, Real ymin, Real ymax, Real zmin, Real zmax, Real step) :
             xmin(xmin), xmax(xmax), ymin(ymin), ymax(ymax), zmin(zmin), zmax(zmax), step(step){
-        //hook_to_grid();
+        hook_to_grid();
         init();
     }
     DataIndex get_number_of_cells() {
@@ -66,9 +67,9 @@ struct Box3 {
         os << std::setprecision(15) <<  "xmin: " << box3.xmin << " xmax: " << box3.xmax << " ymin: " << box3.ymin << " ymax: " << box3.ymax
            << " zmin: " << box3.zmin << " zmax: " << box3.zmax << " simsize_x: " << box3.simsize_x << " simsize_y: "
            << box3.simsize_y << " simsize_z: " << box3.simsize_z << " step: " << box3.step << " x_idx_min: "
-           << box3.x_idx_min << " x_idx_max: " << box3.x_idx_max << " size_x: " << box3.size_x << " y_idx_min: "
-           << box3.y_idx_min << " y_idx_max: " << box3.y_idx_max << " size_y: " << box3.size_y << " z_idx_min: "
-           << box3.z_idx_min << " z_idx_max: " << box3.z_idx_max << " size_z: " << box3.size_z;
+           << box3.x_idx_min << " x_idx_max: " << box3.x_idx_max  << " y_idx_min: "
+           << box3.y_idx_min << " y_idx_max: " << box3.y_idx_max << " z_idx_min: "
+           << box3.z_idx_min << " z_idx_max: " << box3.z_idx_max << " size_x: " << box3.size_x << " size_y: " << box3.size_y << " size_z: " << box3.size_z;
         return os;
     }
 
@@ -86,9 +87,9 @@ private:
         y_idx_max = (type::DataIndex) (ymax / step);
         z_idx_max = (type::DataIndex) (zmax / step);
 
-        size_x    = std::round(simsize_x / step);
-        size_y    = std::round(simsize_y / step);
-        size_z    = std::round(simsize_z / step);
+        size_x    = std::floor(simsize_x / step);
+        size_y    = std::floor(simsize_y / step);
+        size_z    = std::floor(simsize_z / step);
     }
 
     void hook_to_grid(){
@@ -124,11 +125,9 @@ inline std::tuple<DataIndex, DataIndex, DataIndex> cell_to_local_position(DataIn
 }
 
 inline void cell_to_local_position(DataIndex msx, DataIndex msy, DataIndex msz, const Box3& bbox, DataIndex index, DataIndex* x_idx, DataIndex* y_idx, DataIndex* z_idx){
-
     auto gidx = index % msx,
          gidy = (DataIndex) std::floor(index % (msx*msy) / msx),
          gidz = (DataIndex) std::floor(index / (msx*msy));
-
     *x_idx = gidx - bbox.x_idx_min;
     *y_idx = gidy - bbox.y_idx_min;
     *z_idx = gidz - bbox.z_idx_min;
@@ -188,7 +187,10 @@ inline IndexType grid_index_to_cell(IndexType x, IndexType y, IndexType z, const
  * @param f force
  * @return force constrained
  */
+
 Vector_3 constraint_force(const Box3& d, const Point_3& p, const Vector_3& f);
+Vector_3 constraint_force(type::Real xmin, type::Real ymin, type::Real zmin,
+                          type::Real xmax, type::Real ymax, type::Real zmax, const Point_3& p, const Vector_3& f);
 
 template<class InputPointIterator, class InputPointIdIterator>
 std::array<int, 4> get_points_on_plane(InputPointIterator beg_points, InputPointIterator end_points,

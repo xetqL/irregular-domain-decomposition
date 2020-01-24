@@ -9,22 +9,51 @@ Vector_3 constraint_force(const Box3& d, const Point_3& p, const Vector_3& f){
     const auto z = p.z();
     double fx = f.x(), fy = f.y(), fz = f.z();
 
-    if(x <= d.xmin+std::numeric_limits<float>::epsilon()) {
+    if(x <= d.xmin + std::numeric_limits<type::Real>::epsilon()) {
         fx = 0.0;
     }
-    if(y <= d.ymin+std::numeric_limits<float>::epsilon()) {
+    if(y <= d.ymin + std::numeric_limits<type::Real>::epsilon()) {
         fy = 0.0;
     }
-    if(z <= d.zmin+std::numeric_limits<float>::epsilon()) {
+    if(z <= d.zmin + std::numeric_limits<type::Real>::epsilon()) {
         fz = 0.0;
     }
-    if(x >= d.xmax-std::numeric_limits<float>::epsilon()) {
+    if(x >= d.xmax - std::numeric_limits<type::Real>::epsilon()) {
         fx = 0.0;
     }
-    if(y >= d.ymax-std::numeric_limits<float>::epsilon()) {
+    if(y >= d.ymax - std::numeric_limits<type::Real>::epsilon()) {
         fy = 0.0;
     }
-    if(z >= d.zmax-std::numeric_limits<float>::epsilon()) {
+    if(z >= d.zmax - std::numeric_limits<type::Real>::epsilon()) {
+        fz = 0.0;
+    }
+    return Vector_3(fx, fy, fz);
+}
+
+Vector_3 constraint_force(type::Real xmin, type::Real ymin, type::Real zmin,
+                          type::Real xmax, type::Real ymax, type::Real zmax,
+                          const Point_3& p, const Vector_3& f) {
+    const auto x = p.x();
+    const auto y = p.y();
+    const auto z = p.z();
+    type::Real fx = f.x(), fy = f.y(), fz = f.z();
+
+    if(x <= xmin + std::numeric_limits<type::Real>::epsilon()) {
+        fx = 0.0;
+    }
+    if(y <= ymin + std::numeric_limits<type::Real>::epsilon()) {
+        fy = 0.0;
+    }
+    if(z <= zmin + std::numeric_limits<type::Real>::epsilon()) {
+        fz = 0.0;
+    }
+    if(x >= xmax - std::numeric_limits<type::Real>::epsilon()) {
+        fx = 0.0;
+    }
+    if(y >= ymax - std::numeric_limits<type::Real>::epsilon()) {
+        fy = 0.0;
+    }
+    if(z >= zmax - std::numeric_limits<type::Real>::epsilon()) {
         fz = 0.0;
     }
     return Vector_3(fx, fy, fz);
