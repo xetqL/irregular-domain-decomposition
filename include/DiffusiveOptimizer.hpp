@@ -34,8 +34,7 @@ public:
         unsigned int remaining_trials = 10;
         Real mu = init_mu;
         while(remaining_trials) {
-            auto data = part.move_selected_vertices<GridElementComputer, A>
-                    (com, my_cells, avg_load, mu, &delta_load);
+            part.move_selected_vertices<GridElementComputer, A> (com, my_cells, avg_load, mu, &delta_load);
             my_load += delta_load;
             auto current_stats = part.get_neighborhood_load_statistics(com, my_load, my_cells.size());
 

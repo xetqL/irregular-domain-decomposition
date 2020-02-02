@@ -205,8 +205,60 @@ TEST(CellLocalID, areDifferent2) {
     EXPECT_NE(c1.get_lid(), c2.get_lid());
 }
 
+TEST(Cell, ShouldHaveGidWithinDimensionSize) {
 
-TEST(Cell, areCoveringLID) {
+    using Cell = mesh::Cell<elements::Element<3>>;
+    mesh::GridParams& gp = mesh::GridParams::get_instance();
+
+    int worldsize = 1,
+        procs_x       = std::cbrt(worldsize),
+        procs_y       = std::cbrt(worldsize),
+        procs_z       = std::cbrt(worldsize);
+
+    gp.set_grid_resolution(0.0625);
+
+    const type::Real _DOMAIN_SIZE_X = 20.625; type::Real DOMAIN_SIZE_X;
+    const type::Real _DOMAIN_SIZE_Y = 20.625; type::Real DOMAIN_SIZE_Y;
+    const type::Real _DOMAIN_SIZE_Z = 20.625; type::Real DOMAIN_SIZE_Z;
+
+    lb::adjust_simulation_size(_DOMAIN_SIZE_X,_DOMAIN_SIZE_Y,_DOMAIN_SIZE_Z,
+                               procs_x, procs_y, procs_z,
+                               gp.get_grid_resolution(),
+                               &DOMAIN_SIZE_X, &DOMAIN_SIZE_Y, &DOMAIN_SIZE_Z);
+    gp.set_grid_index_dimensions(
+            DOMAIN_SIZE_X / gp.get_grid_resolution(),
+            DOMAIN_SIZE_Y / gp.get_grid_resolution(),
+            DOMAIN_SIZE_Z / gp.get_grid_resolution());
+
+    lb::Domain d(DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z, &gp.get_grid_resolution());
+
+    auto cell_per_col = gp.get_cell_number_x() / procs_x;
+
+    type::DataIndex x_proc_idx, y_proc_idx, z_proc_idx;
+
+    d.bootstrap_partitions(worldsize);
+
+    for(int cpu = 0; cpu < worldsize; ++cpu){
+        //std::cout << cpu << std::endl;
+        lb::linear_to_grid(cpu, procs_x, procs_y, x_proc_idx, y_proc_idx, z_proc_idx);
+        auto my_cells = mesh::generate_lattice_single_type<int>(
+                gp.get_cell_number_x(), gp.get_cell_number_y(), gp.get_cell_number_z(),
+                x_proc_idx, y_proc_idx, z_proc_idx,
+                cell_per_col, cell_per_col, cell_per_col,
+                mesh::TCellType::REAL_CELL);
+        auto part = d.get_partition(cpu);
+        lb::Box3 bbox(part.vertices, gp.get_grid_resolution());
+        const auto size = my_cells.size();
+        for(int i = 0; i < size; ++i) {
+            auto cell = my_cells[i];
+            auto gid = cell.gid;
+            EXPECT_LT(gid, gp.get_cell_number_x() * gp.get_cell_number_y() * gp.get_cell_number_z());
+        }
+    }
+
+}
+
+TEST(Cell, ShouldCoverRangeOfAllLid) {
 
     using Cell = mesh::Cell<elements::Element<3>>;
     mesh::GridParams& gp = mesh::GridParams::get_instance();
@@ -337,9 +389,6 @@ TEST(BoundingBox, isWellDimensionedLocally){
 
 }
 
-
-
-
 TEST(Cell, uniqueGID) {
     using Cell = mesh::Cell<elements::Element<3>>;
 
@@ -382,7 +431,7 @@ TEST(Cell, uniqueGID) {
     }
 }
 
-TEST(DomainSizeX, Check) {
+TEST(Domain, ShouldBeTheSameBetweenGridParamsAndBoundingBox) {
     using Cell = mesh::Cell<elements::Element<3>>;
     mesh::GridParams& gp = mesh::GridParams::get_instance();
     gp.set_grid_resolution(0.000625);
@@ -429,7 +478,7 @@ TEST(DomainSizeX, Check) {
     EXPECT_EQ(d.get_bounding_box().size_z, gp.get_cell_number_z());
 }
 
-TEST(DomainSizeX, ZeroGidZeroLid) {
+TEST(Cell, ShouldHaveAZeroLidWithAZeroGid) {
     using Cell = mesh::Cell<elements::Element<3>>;
 
     mesh::GridParams& gp = mesh::GridParams::get_instance();

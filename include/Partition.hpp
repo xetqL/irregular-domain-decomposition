@@ -574,7 +574,7 @@ public:
     }
 
     template<class LoadComputer, class A>
-    std::vector<std::pair<ProcRank, std::vector<DataIndex>>> move_selected_vertices(int com,
+    void /*std::vector<std::pair<ProcRank, std::vector<DataIndex>>>*/ move_selected_vertices(int com,
             std::vector<mesh::Cell<A>>& elements, Real avg_load, Real mu, Real *delta_load, MPI_Comm neighborhood = MPI_COMM_WORLD) {
         using Cell = mesh::Cell<A>;
         get_MPI_rank(my_rank);
@@ -606,16 +606,15 @@ public:
         const auto my_domain = this->serialize();
         const auto number_of_neighbors = active_neighbors.size();
 
-        std::vector<std::pair<ProcRank, std::vector<mesh::Cell<A>>>>  migration_and_destination(number_of_neighbors);
-        std::vector<std::pair<ProcRank, std::vector<DataIndex>>>      gid_and_destination(number_of_neighbors);
-        std::vector<std::pair<ProcRank, std::vector<DataIndex>>>      neighbor_ghosts(number_of_neighbors);
+        std::vector<std::pair<ProcRank, std::vector<DataIndex>>> gid_and_destination(number_of_neighbors);
+        std::vector<std::pair<ProcRank, std::vector<A>>>         data_and_destination(number_of_neighbors);
 
-        std::transform(active_neighbors.begin(), active_neighbors.end(), migration_and_destination.begin(),
-                       [](ProcRank i){ return std::make_pair(i, std::vector<mesh::Cell<A>>()); });
+
         std::transform(active_neighbors.begin(), active_neighbors.end(), gid_and_destination.begin(),
                        [](ProcRank i){ return std::make_pair(i, std::vector<DataIndex>()); });
-        std::transform(active_neighbors.begin(), active_neighbors.end(), neighbor_ghosts.begin(),
-                       [](ProcRank i){ return std::make_pair(i, std::vector<DataIndex>()); });
+        std::transform(active_neighbors.begin(), active_neighbors.end(), data_and_destination.begin(),
+                       [](ProcRank i){ return std::make_pair(i, std::vector<A>()); });
+
 
         std::vector<Real> recv_buff(active_neighbors.size()*8*3);
         std::vector<MPI_Request> srequests(active_neighbors.size()), rrequests(active_neighbors.size());
@@ -629,8 +628,8 @@ public:
             }
         }
 
-        MPI_Waitall(number_of_neighbors, rrequests.data(), MPI_STATUSES_IGNORE);
-        MPI_Waitall(number_of_neighbors, srequests.data(), MPI_STATUSES_IGNORE);
+        MPI_Waitall(active_neighbors.size(), rrequests.data(), MPI_STATUSES_IGNORE);
+        MPI_Waitall(active_neighbors.size(), srequests.data(), MPI_STATUSES_IGNORE);
 
         std::vector<Partition> neighborhoods;
         for(int i = 0; i < number_of_neighbors; ++i) {
@@ -662,20 +661,21 @@ public:
                 if(elements[data_id].type == mesh::REAL_CELL) {
                     bool found = false;
                     for (int nid = 0; nid < number_of_neighbors && !found; ++nid) {
-                        const auto neighbor_rank = migration_and_destination[nid].first;
+                        const auto neighbor_rank = gid_and_destination[nid].first;
                         if (neighbor_rank >= 0 && neighbor_rank != my_rank){
                             const auto &neighborhood_domains = neighborhoods[nid];
                             if (neighborhood_domains.contains(point)) {
-                                migration_and_destination[nid].second.push_back(std::move(elements[data_id]));
+                                gid_and_destination[nid].second.push_back(elements[data_id].get_gid());
+                                data_and_destination[nid].second.insert(data_and_destination[nid].second.begin(),
+                                                                         (elements[data_id].begin()),
+                                                                         (elements[data_id].end()));
                                 nb_migrate++;
                                 found = true;
                                 break;
                             }
                         }
                     }
-                    if(!found){
-                        std::cout << elements[data_id] << std::endl;
-                        dbg_out();
+                    if(!found) {
                         throw std::runtime_error("Real cell must belong to someone");
                     }
                 }
@@ -683,16 +683,8 @@ public:
             } else { // contained by polygon but wrong local id
                 if(elements[data_id].type == mesh::REAL_CELL){
                     auto lid = elements[data_id].get_lid(grid_params.get_cell_number_x(), grid_params.get_cell_number_y(), grid_params.get_cell_number_z(), bbox);
-                    try{
-                        elements[data_id].lid = lid;
-                        new_elements.at(lid) = std::move(elements[data_id]);
-                    }catch(...){
-                        std::cout << elements[data_id] << std::endl;
-                        std::cout << bbox << std::endl;
-                        dbg_out();
-                        std::cout << grid_params << std::endl;
-                        throw std::runtime_error(std::to_string(lid) + " " + std::to_string(new_elements.size()));
-                    }
+                    elements[data_id].lid = lid;
+                    new_elements.at(lid) = std::move(elements[data_id]);
                     // put in the right position in the new array;
                     nb_to_keep++;
                 }
@@ -700,15 +692,6 @@ public:
             data_id++;
         }
 
-        for(int i = 0; i < new_elements.size(); ++i) {
-            auto cell = new_elements[i];
-            //cell.update_lid(domain.size_x, domain.size_y, domain.size_z, bbox);
-            if(i != cell.lid) {
-                std::cout << cell << std::endl;
-                throw std::runtime_error("lol?");
-            }
-
-        }
 #ifdef DEBUG
         std::cout << my_rank << " transferred " << nb_migrate  << std::endl;
 #endif
@@ -717,57 +700,38 @@ public:
         {
             std::vector<MPI_Request> srequests(2*number_of_neighbors);
             Real sent_load = 0;
-            for(int nid = 0; nid < number_of_neighbors; ++nid) {
-                int dest_rank = migration_and_destination[nid].first;
-                std::vector<mesh::Cell<A>>& scells     = migration_and_destination[nid].second;
-                std::vector<DataIndex> gids(scells.size());
-                auto array_size = scells.size();
-                size_t nb_elements = 0;
-                for(size_t i = 0; i < array_size; ++i) {
-                    gids[i] = scells[i].gid;
-                    nb_elements += scells[i].get_number_of_elements();
-                }
-                std::vector<A> sdata;
-                sdata.reserve(nb_elements);
-                for(size_t i = 0; i < array_size; ++i) {
-                    sdata.insert(sdata.begin(),
-                                 std::make_move_iterator(scells[i].begin()), std::make_move_iterator(scells[i].end()));
-                }
-                MPI_Isend(sdata.data(), sdata.size(), datatype.element_datatype, dest_rank, 101010, MPI_COMM_WORLD, &srequests[2*nid]);
-                MPI_Isend(gids.data(),   gids.size(), MPI_TYPE_DATA_INDEX,       dest_rank, 101011, MPI_COMM_WORLD, &srequests[2*nid+1]);
-            }
 
+            for(int nid = 0; nid < number_of_neighbors; ++nid) {
+                int dest_rank = gid_and_destination[nid].first;
+                if(my_rank == 1) std::cout << "1 Send " << gid_and_destination[nid].second.size() << " to " << dest_rank << std::endl;
+                MPI_Isend(gid_and_destination[nid].second.data(),   gid_and_destination[nid].second.size(), MPI_TYPE_DATA_INDEX,       dest_rank, 101011, MPI_COMM_WORLD,  &srequests[2*nid+1]);
+                MPI_Isend(data_and_destination[nid].second.data(),  data_and_destination[nid].second.size(), datatype.element_datatype, dest_rank, 101010, MPI_COMM_WORLD, &srequests[2*nid]);
+            }
 
             std::vector<A> data_buf;
             std::vector<DataIndex > gids_buf;
             Real recv_load = 0;
             int count;
             MPI_Status status;
-            for(int nid = 0; nid < number_of_neighbors; ++nid) {
-                int dest_rank = migration_and_destination[nid].first;
-
+            for(auto dest_rank : active_neighbors) {
                 MPI_Probe(dest_rank, 101011, MPI_COMM_WORLD, &status);
-                MPI_Get_count(&status, MPI_TYPE_DATA_INDEX,  &count);
+                MPI_Get_count(&status,  MPI_TYPE_DATA_INDEX,  &count);
                 gids_buf.resize(count);
                 MPI_Recv(gids_buf.data(), count, MPI_TYPE_DATA_INDEX, dest_rank, 101011, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
+                //if(dest_rank == 1) std::cout << my_rank << " Recv " << count << " from 1 " << dest_rank << std::endl;
                 /* create cell to hold elements */
-                for(DataIndex gid : gids_buf) {
+                for(auto gid : gids_buf) {
                     Cell c(gid, grid_params.get_cell_number_x(), grid_params.get_cell_number_y(), grid_params.get_cell_number_z(), bbox, mesh::REAL_CELL);
-                    auto lid = c.get_lid(grid_params.get_cell_number_x(), grid_params.get_cell_number_y(), grid_params.get_cell_number_z(), bbox);//mesh::compute_lid(domain.size_x, domain.size_y, domain.size_z, gid, bbox);
+                    auto lid = c.get_lid(grid_params.get_cell_number_x(), grid_params.get_cell_number_y(), grid_params.get_cell_number_z(), bbox); //mesh::compute_lid(domain.size_x, domain.size_y, domain.size_z, gid, bbox);
+                    //std::cout << my_rank <<" "<< gid << std::endl;
                     if(lid >= new_elements.size()){
-                        std::cout << bbox << std::endl;
-                        std::cout << c << std::endl;
                         throw std::runtime_error("out of bound");
                     }
                     //assert(new_elements.at(lid).type != mesh::REAL_CELL);
                     new_elements.emplace(new_elements.begin() + lid, gid, grid_params.get_cell_number_x(), grid_params.get_cell_number_y(), grid_params.get_cell_number_z(), bbox, mesh::REAL_CELL);
                 }
-
             }
-
-            for(int nid = 0; nid < number_of_neighbors; ++nid) {
-                int dest_rank = migration_and_destination[nid].first;
+            for(auto dest_rank : active_neighbors) {
                 MPI_Probe(dest_rank, 101010, MPI_COMM_WORLD, &status);
 
                 MPI_Get_count(&status, datatype.element_datatype, &count);
@@ -782,18 +746,20 @@ public:
                     DataIndex lid = (ix - bbox.x_idx_min) + bbox.size_x * (iy - bbox.y_idx_min) + bbox.size_y * bbox.size_x * (iz - bbox.z_idx_min);
                     new_elements.at(lid).add(std::move(el));
                 }
+
             }
 #ifdef DEBUG
             std::cout << my_rank << " received " << recv_load << std::endl;
 #endif
-            MPI_Waitall(number_of_neighbors, srequests.data(), MPI_STATUSES_IGNORE);
+            MPI_Waitall(2*number_of_neighbors, srequests.data(), MPI_STATUSES_IGNORE);
+            //MPI_Waitall(number_of_neighbors, rrequests.data(), MPI_STATUSES_IGNORE);
 #ifdef DEBUG
             std::cout << my_rank << " leaves " << __func__ << std::endl;
 #endif
             *delta_load = recv_load - sent_load;
             elements = new_elements;
         }
-        return neighbor_ghosts;
+        //return neighbor_ghosts;
     }
 
     template<class NumericalType>

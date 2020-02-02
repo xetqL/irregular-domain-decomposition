@@ -267,12 +267,12 @@ int main(int argc, char** argv) {
         }
         /*auto stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
         if(!my_rank) print_load_statitics(stats);*/
-
+/*
         for(int i = 0; i < world_size; ++i){
             if(rank == i) std::cout << rank << " " << part << std::endl;
             MPI_Barrier(MPI_COMM_WORLD);
         }
-
+*/
         degradation_since_last_lb +=
                 median<double>(max_iteration_time_window.end()-std::min(3, (int) max_iteration_time_window.size()), max_iteration_time_window.end()) -
                 median<double>(avg_iteration_time_window.end()-std::min(3, (int) max_iteration_time_window.size()), avg_iteration_time_window.end());

@@ -104,13 +104,17 @@ struct Cell {
     using IndexType  = type::DataIndex;
     using value_type = ContainedElement;
     using Real       = type::Real;
-
-    IndexType gid, lid;
-    TCellType type;
-
 private:
+    IndexType gid;
     std::vector<ContainedElement> elements;
 public:
+    IndexType lid;
+    TCellType type;
+
+    IndexType get_gid() const {
+        return gid;
+    }
+
     Cell() : gid(0), lid(0), type(TCellType::UNITIALIZED_CELL) {};
 
     Cell(TCellType type) : gid(0), lid(0), type(type) {};
