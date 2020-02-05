@@ -14,7 +14,7 @@ int get_rank_from_vertices(const std::array<int, 4>& vertices_id, const std::map
     get_MPI_rank(my_rank);
     std::vector<int> ranks;
     std::set<int> unique_ranks;
-    for(int vid : vertices_id){
+    for(int vid : vertices_id) {
         auto neighbors = neighborhoods.at(vid).get_ranks();
         std::copy(neighbors.begin(), neighbors.end(), std::back_inserter(ranks));
         std::copy(neighbors.begin(), neighbors.end(), std::inserter(unique_ranks, unique_ranks.begin()));
@@ -23,6 +23,17 @@ int get_rank_from_vertices(const std::array<int, 4>& vertices_id, const std::map
         if(std::count(ranks.cbegin(), ranks.cend(), r) == 4 && r != my_rank) return r;
     }
     throw std::runtime_error("nobody owns the 4 vertices?");
+}
+
+std::array<std::set<int>, 12> get_ranks_per_plane(
+        const std::array<VertexIndex, 8>& vids,
+        const std::map<int, Communicator>& comms) {
+    auto planes_vid = get_planes_vids(vids);
+    std::array<std::set<int>, 12> ranks_per_plane;
+    for(int i = 0; i < 12; ++i) {
+        ranks_per_plane[i] = get_ranks_from_vertices<3>(planes_vid[i], comms);
+    }
+    return ranks_per_plane;
 }
 
 int translate_iteration_to_vertex_group(int physical_iteration, lb::Point_3 coord){

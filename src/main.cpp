@@ -227,16 +227,14 @@ int main(int argc, char** argv) {
         }
 
         virtual_time = workload;
-
         SlidingWindow<double>& max_iteration_time_window = com_max_iteration_time_window[com];
         SlidingWindow<double>& avg_iteration_time_window = com_avg_iteration_time_window[com];
         auto avg_lb_cost = std::accumulate(C.begin(), C.end(), 0.0) / C.size();
         lb_decision = degradation_since_last_lb >= avg_lb_cost;
-        // std::cout << my_rank << " >> "<< j << "; com = "<< com << " " << (lb_decision ? "True" : "False") << std::endl;
 
-        if(true) {
+        if(lb_decision) {
 
-            auto start_time = MPI_Wtime();
+            double start_time = MPI_Wtime();
             opt.optimize_neighborhood(com, part, my_cells, mu);
             double lb_time  = MPI_Wtime() - start_time;
 
@@ -248,16 +246,18 @@ int main(int argc, char** argv) {
 
             C.push_back(lb_time);
             auto avg_lb_cost = std::accumulate(C.begin(), C.end(), 0.0) / C.size();
-            //std::cout << avg_lb_cost << std::endl;
-            double slope = max_iteration_time_window.data_container.back() - max_iteration_time_window.data_container.front(); //get_slope<double>(iteration_time_window.data_container)
+            double slope = max_iteration_time_window.data_container.back() - max_iteration_time_window.data_container.front();
             int tau = (int) std::sqrt(2.0 * avg_lb_cost / slope);
-            if(tau < 0)  tau = 40;
+
+            if(tau < 0)  tau = 40; //
             if(tau == 0) tau = 1;
+
             {
                 std::vector<int> com_tau(communicator.comm_size, 0);
                 communicator.Allgather(&tau, 1, MPI_INT, com_tau.data(), 1, MPI_INT, vid);
                 ncall = *std::max_element(com_tau.cbegin(), com_tau.cend());
             }
+
             max_iteration_time_window.data_container.clear();
             avg_iteration_time_window.data_container.clear();
             degradation_since_last_lb = 0.0;
@@ -278,11 +278,19 @@ int main(int argc, char** argv) {
                 median<double>(avg_iteration_time_window.end()-std::min(3, (int) max_iteration_time_window.size()), avg_iteration_time_window.end());
 
         virtual_times[j] = virtual_time;
-
+        /* increase workload */
         if(!my_rank) {
-            /* increase workload */
             cum_vtime[j] = j == 0 ? virtual_time : cum_vtime[j-1] + virtual_time;
         }
+
+        std::vector<Particle > rp(params.npart), sp;
+        for(auto& cell : my_cells)
+            rp.insert(rp.begin(), cell.begin(), cell.end());
+
+        CommunicationDatatype datatype = Particle::register_datatype();
+
+        gather_elements_on(sp.data(), sp.size(), datatype.element_datatype, rp.data(), 0, MPI_COMM_WORLD);
+
 #ifdef OUTPUTS
         for(int i = 0; i < world_size; ++i){
             if(my_rank == i)

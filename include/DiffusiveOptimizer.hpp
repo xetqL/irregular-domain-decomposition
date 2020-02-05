@@ -23,7 +23,6 @@ public:
 #ifdef DEBUG
         std::cout << my_rank << " enters " << __func__ << " with vid "<< vid << " with size " << part.vertex_neighborhood[vid].comm_size << std::endl;
 #endif
-        //GridElementComputer lc;
 
         auto stats = part.get_neighborhood_load_statistics<GridElementComputer>(com, my_cells);
         auto my_load = stats.my_load;
@@ -31,7 +30,7 @@ public:
         auto avg_load = stats.avg_load;
 
         Real delta_load = 0;
-        unsigned int remaining_trials = 10;
+        unsigned int remaining_trials = 2;
         Real mu = init_mu;
         while(remaining_trials) {
             part.move_selected_vertices<GridElementComputer, A> (com, my_cells, avg_load, mu, &delta_load);
@@ -42,7 +41,7 @@ public:
                 remaining_trials--;
                 mu /= 2.0;
             } else {
-                remaining_trials = 3;
+                remaining_trials = 2;
                 prev_imbalance = current_stats.global;
             }
         }

@@ -45,6 +45,29 @@ Real compute_mu(Real grid_size, Real max_normalized_load);
 int get_rank_from_vertices(const std::array<int, 4>& vertices_id, const std::map<int, Communicator>& neighborhoods);
 int translate_iteration_to_vertex_group(int physical_iteration, lb::Point_3 coord);
 
+template<int N>
+std::set<int> get_ranks_from_vertices(
+        const std::array<VertexIndex, N>& vertices_id,
+        const std::map<int, Communicator>& neighborhoods){
+    get_MPI_rank(my_rank);
+    std::vector<int> ranks;
+    std::set<int> unique_ranks;
+    for(int vid : vertices_id) {
+        auto neighbors = neighborhoods.at(vid).get_ranks();
+        std::copy(neighbors.begin(), neighbors.end(), std::back_inserter(ranks));
+        std::copy(neighbors.begin(), neighbors.end(), std::inserter(unique_ranks, unique_ranks.begin()));
+    }
+    for(int r : unique_ranks) {
+        if(std::count(ranks.cbegin(), ranks.cend(), r) == N && r != my_rank) return r;
+    }
+    throw std::runtime_error("nobody owns the "+std::to_string(N)+" vertices?");
+}
+
+
+std::array<std::set<int>, 12> get_ranks_per_plane(
+        const std::array<VertexIndex, 8>& vids,
+        const std::map<int, Communicator>& comms);
+
 class Partition {
 public:
 
@@ -156,40 +179,38 @@ public:
         return in_tetrahedron(tetrahedra[0], p) || in_tetrahedron(tetrahedra[1], p) || in_tetrahedron(tetrahedra[2], p) || in_tetrahedron(tetrahedra[3], p) || in_tetrahedron(tetrahedra[4], p) || in_tetrahedron(tetrahedra[5], p);
     }
 
-    template<class CartesianPointTransformer, class A>
-    bool is_ghost(const CartesianPointTransformer& c, const A& p) {
-        return is_ghost(c.transform(p));
-    }
 
-    bool is_ghost(const std::array<Plane_3, 12>& planes, const Point_3& p){
+
+    inline bool is_ghost(const std::array<Plane_3, 12>& planes, const Point_3& p){
         std::array<Real, 12> distances_to_plane;
         std::transform(planes.cbegin(), planes.cend(), distances_to_plane.begin(), [&p](Plane_3 plane){return CGAL::squared_distance(p, plane);});
         auto min_distance = std::sqrt(*std::min_element(distances_to_plane.cbegin(), distances_to_plane.cend()));
         return min_distance <= (std::sqrt(3) * (*grid_cell_size));
     }
 
-    inline std::vector<Plane_3> find_planes_closer_than(const std::array<Plane_3, 12>& planes, const Point_3& p, Real cut_off) {
+    inline std::vector<int> find_planes_closer_than(const std::array<Plane_3, 12>& planes, const Point_3& p, Real cut_off) {
         std::array<Real, 12> distances_to_plane;
         std::transform(planes.cbegin(), planes.cend(), distances_to_plane.begin(), [&p](Plane_3 plane){return CGAL::squared_distance(p, plane);});
-        std::vector<Plane_3> closest_planes;
+        std::vector<int> closest_planes;
         for(int i = 0; i < 12; ++i) {
-            if(distances_to_plane[i] <= cut_off*cut_off) closest_planes.push_back(planes[i]);
+            if(distances_to_plane[i] <= cut_off*cut_off) closest_planes.push_back(i);
         }
         return closest_planes;
     }
+/*
 
-    template<class CartesianPointTransformer, class A>
-    std::vector<std::pair<std::vector<Plane_3>, int> > get_ghosts_and_destination_planes(const std::vector<A>& elements) {
-        CartesianPointTransformer c;
+    template<class A>
+    std::vector<std::pair<std::vector<Plane_3>, int> > get_ghosts_and_destination_planes(const std::vector<mesh::Cell<A>>& elements) {
         std::vector<std::pair<std::vector<Plane_3>, int>> ghosts;
         const auto size = elements.size();
         for(int i = 0; i < size; ++i) {
-            auto closest_planes = find_planes_closer_than(planes, c.transform(elements[i]), sqrt_3* (*grid_cell_size));
+            auto closest_planes = find_planes_closer_than(planes, elements[i].get_center_point(), sqrt_3* (*grid_cell_size));
             if(closest_planes.size() > 0)
                 ghosts.push_back(std::make_pair(closest_planes, i));
         }
         return ghosts;
     }
+*/
 
     std::vector<std::pair<std::vector<int>, int>> compute_ghosts_destination_ranks(const std::vector<std::pair<std::vector<Plane_3>, int>>& ghosts_and_planes) {
         std::vector<std::pair<std::vector<int>, int>> ghost_and_ranks;
@@ -520,7 +541,7 @@ public:
         while(data_id < elements.size()) {
             auto point = transformer.transform(elements[data_id]);
             bool is_real_cell = this->contains(point);
-            auto closest_planes = find_planes_closer_than(planes, point, sqrt_3* (*grid_cell_size));
+            //auto closest_planes = find_planes_closer_than(planes, point, sqrt_3* (*grid_cell_size));
             if(!is_real_cell){ // transfer data to neighbor
                 for(int nid = 0; nid < number_of_neighbors; ++nid) {
                     const auto neighbor_rank = migration_and_destination[nid].first;
@@ -609,12 +630,10 @@ public:
         std::vector<std::pair<ProcRank, std::vector<DataIndex>>> gid_and_destination(number_of_neighbors);
         std::vector<std::pair<ProcRank, std::vector<A>>>         data_and_destination(number_of_neighbors);
 
-
         std::transform(active_neighbors.begin(), active_neighbors.end(), gid_and_destination.begin(),
                        [](ProcRank i){ return std::make_pair(i, std::vector<DataIndex>()); });
         std::transform(active_neighbors.begin(), active_neighbors.end(), data_and_destination.begin(),
                        [](ProcRank i){ return std::make_pair(i, std::vector<A>()); });
-
 
         std::vector<Real> recv_buff(active_neighbors.size()*8*3);
         std::vector<MPI_Request> srequests(active_neighbors.size()), rrequests(active_neighbors.size());
@@ -652,41 +671,51 @@ public:
 
         int nb_to_migrate = 0, nb_to_keep = 0, nb_empty = 0;
         auto nb_elements = elements.size();
+
+        auto ranks_per_plane = get_ranks_per_plane(vertices_id, vertex_neighborhood);
+        std::unordered_map<int, std::vector<DataIndex>> ghost_and_destination;
         while(data_id < nb_elements) {
-            auto point = elements[data_id].get_center_point();
-            bool is_real_cell = this->contains(point);
-            //elements[data_id].update_lid(domain.size_x, domain.size_y, domain.size_z, bbox);
-            if(!is_real_cell) { // it is not in my polygon
-                /* is it a REAL_CELL that must be migrated ? */
-                if(elements[data_id].type == mesh::REAL_CELL) {
+            if(elements[data_id].type == mesh::REAL_CELL) {
+                auto point = elements[data_id].get_center_point();
+                bool is_real_cell = this->contains(point);
+                //elements[data_id].update_lid(domain.size_x, domain.size_y, domain.size_z, bbox);
+                if (!is_real_cell) { // it is not in my polygon
                     bool found = false;
                     for (int nid = 0; nid < number_of_neighbors && !found; ++nid) {
                         const auto neighbor_rank = gid_and_destination[nid].first;
-                        if (neighbor_rank >= 0 && neighbor_rank != my_rank){
+                        if (neighbor_rank >= 0 && neighbor_rank != my_rank) {
                             const auto &neighborhood_domains = neighborhoods[nid];
                             if (neighborhood_domains.contains(point)) {
                                 gid_and_destination[nid].second.push_back(elements[data_id].get_gid());
                                 data_and_destination[nid].second.insert(data_and_destination[nid].second.begin(),
-                                                                         (elements[data_id].begin()),
-                                                                         (elements[data_id].end()));
+                                                                        (elements[data_id].begin()),
+                                                                        (elements[data_id].end()));
                                 nb_migrate++;
                                 found = true;
                                 break;
                             }
                         }
                     }
-                    if(!found) {
+                    if (!found) {
                         throw std::runtime_error("Real cell must belong to someone");
                     }
-                }
-                nb_empty++;
-            } else { // contained by polygon but wrong local id
-                if(elements[data_id].type == mesh::REAL_CELL){
-                    auto lid = elements[data_id].get_lid(grid_params.get_cell_number_x(), grid_params.get_cell_number_y(), grid_params.get_cell_number_z(), bbox);
+                } else { // contained by polygon but wrong local id
+
+                    auto lid = elements[data_id].get_lid(grid_params.get_cell_number_x(),
+                                                         grid_params.get_cell_number_y(),
+                                                         grid_params.get_cell_number_z(), bbox);
+
+                    auto close_planes = find_planes_closer_than(planes, point, 1.0);
+                    for(auto p : close_planes) {
+                        std::set<int> rpp = ranks_per_plane[p];
+                        for(int dest : rpp) {
+                            ghost_and_destination[dest].push_back(lid);
+                        }
+                    }
+
                     elements[data_id].lid = lid;
                     new_elements.at(lid) = std::move(elements[data_id]);
-                    // put in the right position in the new array;
-                    nb_to_keep++;
+
                 }
             }
             data_id++;
@@ -695,6 +724,7 @@ public:
 #ifdef DEBUG
         std::cout << my_rank << " transferred " << nb_migrate  << std::endl;
 #endif
+
         /* Migrate the data */
         CommunicationDatatype datatype = A::register_datatype();
         {
@@ -703,14 +733,15 @@ public:
 
             for(int nid = 0; nid < number_of_neighbors; ++nid) {
                 int dest_rank = gid_and_destination[nid].first;
-                if(my_rank == 1) std::cout << "1 Send " << gid_and_destination[nid].second.size() << " to " << dest_rank << std::endl;
-                MPI_Isend(gid_and_destination[nid].second.data(),   gid_and_destination[nid].second.size(), MPI_TYPE_DATA_INDEX,       dest_rank, 101011, MPI_COMM_WORLD,  &srequests[2*nid+1]);
+                sent_load += data_and_destination[nid].second.size();
+                MPI_Isend(gid_and_destination[nid].second.data(),   gid_and_destination[nid].second.size(),  MPI_TYPE_DATA_INDEX,       dest_rank, 101011, MPI_COMM_WORLD,  &srequests[2*nid+1]);
                 MPI_Isend(data_and_destination[nid].second.data(),  data_and_destination[nid].second.size(), datatype.element_datatype, dest_rank, 101010, MPI_COMM_WORLD, &srequests[2*nid]);
             }
 
             std::vector<A> data_buf;
             std::vector<DataIndex > gids_buf;
             Real recv_load = 0;
+
             int count;
             MPI_Status status;
             for(auto dest_rank : active_neighbors) {
@@ -718,17 +749,12 @@ public:
                 MPI_Get_count(&status,  MPI_TYPE_DATA_INDEX,  &count);
                 gids_buf.resize(count);
                 MPI_Recv(gids_buf.data(), count, MPI_TYPE_DATA_INDEX, dest_rank, 101011, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                //if(dest_rank == 1) std::cout << my_rank << " Recv " << count << " from 1 " << dest_rank << std::endl;
                 /* create cell to hold elements */
                 for(auto gid : gids_buf) {
                     Cell c(gid, grid_params.get_cell_number_x(), grid_params.get_cell_number_y(), grid_params.get_cell_number_z(), bbox, mesh::REAL_CELL);
                     auto lid = c.get_lid(grid_params.get_cell_number_x(), grid_params.get_cell_number_y(), grid_params.get_cell_number_z(), bbox); //mesh::compute_lid(domain.size_x, domain.size_y, domain.size_z, gid, bbox);
-                    //std::cout << my_rank <<" "<< gid << std::endl;
-                    if(lid >= new_elements.size()){
-                        throw std::runtime_error("out of bound");
-                    }
-                    //assert(new_elements.at(lid).type != mesh::REAL_CELL);
-                    new_elements.emplace(new_elements.begin() + lid, gid, grid_params.get_cell_number_x(), grid_params.get_cell_number_y(), grid_params.get_cell_number_z(), bbox, mesh::REAL_CELL);
+                    new_elements.at(lid) = std::move(c);
+                    new_elements.at(lid).lid = lid;
                 }
             }
             for(auto dest_rank : active_neighbors) {
@@ -739,20 +765,17 @@ public:
                 MPI_Recv(data_buf.data(), count, datatype.element_datatype, dest_rank, 101010, MPI_COMM_WORLD,
                          MPI_STATUS_IGNORE);
                 recv_load += count;
-
                 for(A &el : data_buf) {
                     auto indexes = position_to_index(el.position[0],el.position[1],el.position[2], *grid_cell_size);
                     DataIndex ix = std::get<0>(indexes), iy = std::get<1>(indexes),iz = std::get<2>(indexes);
                     DataIndex lid = (ix - bbox.x_idx_min) + bbox.size_x * (iy - bbox.y_idx_min) + bbox.size_y * bbox.size_x * (iz - bbox.z_idx_min);
                     new_elements.at(lid).add(std::move(el));
                 }
-
             }
 #ifdef DEBUG
             std::cout << my_rank << " received " << recv_load << std::endl;
 #endif
-            MPI_Waitall(2*number_of_neighbors, srequests.data(), MPI_STATUSES_IGNORE);
-            //MPI_Waitall(number_of_neighbors, rrequests.data(), MPI_STATUSES_IGNORE);
+            MPI_Waitall(2 * number_of_neighbors, srequests.data(), MPI_STATUSES_IGNORE);
 #ifdef DEBUG
             std::cout << my_rank << " leaves " << __func__ << std::endl;
 #endif

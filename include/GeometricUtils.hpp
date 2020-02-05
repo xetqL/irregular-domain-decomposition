@@ -255,7 +255,7 @@ inline Vector_3 get_direction(const Point_3& vertex, const Point_3& center_of_lo
 }
 
 Vector_3 get_vertex_force(const Point_3& vertex, const std::vector<Point_3>& centers_of_load, const std::vector<Real>& normalized_loads);
-
+std::array<std::array<VertexIndex, 3>, 12> get_planes_vids(const std::array<VertexIndex, 8>& vids);
 bool lb_isGeometryValid(const std::array<Point_3, 8>& vertices, const std::array<Plane_3, 12>& planes, const Real grid_size);
 
 template<class InputIterator>

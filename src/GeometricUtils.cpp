@@ -79,6 +79,22 @@ std::array<Plane_3, 12> get_planes(const std::array<Point_3, 8>& vertices){
             Plane_3(vertices[6], vertices[7], vertices[3]),
     };
 }
+
+std::array<std::array<VertexIndex, 3>, 12> get_planes_vids(const std::array<VertexIndex , 8>& vids){
+    return {{{vids[1], vids[4], vids[0]},
+             {vids[1], vids[5], vids[4]},
+             {vids[2], vids[1], vids[0]},
+             {vids[2], vids[3], vids[1]},
+             {vids[3], vids[7], vids[5]},
+             {vids[3], vids[5], vids[1]},
+             {vids[4], vids[2], vids[0]},
+             {vids[4], vids[6], vids[2]},
+             {vids[5], vids[7], vids[6]},
+             {vids[5], vids[6], vids[4]},
+             {vids[6], vids[3], vids[2]},
+             {vids[6], vids[7], vids[3]}}};
+}
+
 std::array<Tetrahedron_3, 6> get_tetrahedra(const std::array<Point_3, 8>& vertices) {
     return {
             Tetrahedron_3(vertices[0], vertices[3], vertices[1], vertices[7]),

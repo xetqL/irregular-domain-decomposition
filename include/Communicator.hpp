@@ -41,9 +41,10 @@ void gather_elements_on(std::vector<T>& send, int size, MPI_Datatype type, std::
     MPI_Gather(&size, 1, MPI_INT, counts.data(), 1, MPI_INT, destrank, comm);
     for(int cpu = 0; cpu < worldsize; cpu++)
         displs[cpu] = cpu == 0 ? 0 : displs[cpu - 1] + counts[cpu - 1];
-    recv.resize(std::accumulate(counts.begin(), counts.end(), 0));
+    recv.resize( std::accumulate(counts.begin(), counts.end(), 0) );
     MPI_Gatherv(send.data(), size, type, recv.data(), counts.data(), displs.data(), type, destrank, comm);
 }
+
 template<class T>
 void gather_elements_on(T* send, int size, MPI_Datatype type, T* recv, int destrank, MPI_Comm comm){
     get_MPI_worldsize(worldsize);
