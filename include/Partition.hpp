@@ -42,29 +42,32 @@ using namespace type;
                   "\n===============================================" << std::endl;
     }
 Real compute_mu(Real grid_size, Real max_normalized_load);
-int get_rank_from_vertices(const std::array<int, 4>& vertices_id, const std::map<int, Communicator>& neighborhoods);
+//int get_rank_from_vertices(const std::array<int, 4>& vertices_id, const std::map<int, Communicator>& neighborhoods);
 int translate_iteration_to_vertex_group(int physical_iteration, lb::Point_3 coord);
 
 template<int N>
-std::set<int> get_ranks_from_vertices(
+int get_vertices_owner(
         const std::array<VertexIndex, N>& vertices_id,
         const std::map<int, Communicator>& neighborhoods){
     get_MPI_rank(my_rank);
     std::vector<int> ranks;
     std::set<int> unique_ranks;
+
     for(int vid : vertices_id) {
         auto neighbors = neighborhoods.at(vid).get_ranks();
         std::copy(neighbors.begin(), neighbors.end(), std::back_inserter(ranks));
         std::copy(neighbors.begin(), neighbors.end(), std::inserter(unique_ranks, unique_ranks.begin()));
     }
+
     for(int r : unique_ranks) {
         if(std::count(ranks.cbegin(), ranks.cend(), r) == N && r != my_rank) return r;
     }
+
     throw std::runtime_error("nobody owns the "+std::to_string(N)+" vertices?");
 }
 
 
-std::array<std::set<int>, 12> get_ranks_per_plane(
+std::array<int, 12> get_planes_owner (
         const std::array<VertexIndex, 8>& vids,
         const std::map<int, Communicator>& comms);
 
@@ -211,7 +214,7 @@ public:
         return ghosts;
     }
 */
-
+/*
     std::vector<std::pair<std::vector<int>, int>> compute_ghosts_destination_ranks(const std::vector<std::pair<std::vector<Plane_3>, int>>& ghosts_and_planes) {
         std::vector<std::pair<std::vector<int>, int>> ghost_and_ranks;
         for(auto const& ghost_and_planes : ghosts_and_planes) {
@@ -224,7 +227,7 @@ public:
         }
         return ghost_and_ranks;
     }
-
+*/
     LinearHashMap<VertexIndex, std::vector<Point_3>, 8> spread_centers_of_load(const Point_3& cl, const std::map<int, Communicator>& neighborhood) {
         int N;
         LinearHashMap<VertexIndex, std::vector<Point_3>, 8> all_cl;
@@ -672,7 +675,7 @@ public:
         int nb_to_migrate = 0, nb_to_keep = 0, nb_empty = 0;
         auto nb_elements = elements.size();
 
-        auto ranks_per_plane = get_ranks_per_plane(vertices_id, vertex_neighborhood);
+        auto ranks_per_plane = get_planes_owner(vertices_id, vertex_neighborhood);
         std::unordered_map<int, std::vector<DataIndex>> ghost_and_destination;
         while(data_id < nb_elements) {
             if(elements[data_id].type == mesh::REAL_CELL) {
@@ -704,18 +707,13 @@ public:
                     auto lid = elements[data_id].get_lid(grid_params.get_cell_number_x(),
                                                          grid_params.get_cell_number_y(),
                                                          grid_params.get_cell_number_z(), bbox);
-
                     auto close_planes = find_planes_closer_than(planes, point, 1.0);
                     for(auto p : close_planes) {
-                        std::set<int> rpp = ranks_per_plane[p];
-                        for(int dest : rpp) {
-                            ghost_and_destination[dest].push_back(lid);
-                        }
+                        auto owner = ranks_per_plane[p];
+                        ghost_and_destination[owner].push_back(lid);
                     }
-
                     elements[data_id].lid = lid;
                     new_elements.at(lid) = std::move(elements[data_id]);
-
                 }
             }
             data_id++;

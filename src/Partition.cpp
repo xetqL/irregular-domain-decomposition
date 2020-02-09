@@ -9,7 +9,7 @@ Real compute_mu(Real grid_size, Real max_normalized_load){
     Real sigma_max = max_normalized_load-1;
     return sigma_max == 0 ? 0 : grid_size/(sigma_max);
 }
-
+/*
 int get_rank_from_vertices(const std::array<int, 4>& vertices_id, const std::map<int, Communicator>& neighborhoods){
     get_MPI_rank(my_rank);
     std::vector<int> ranks;
@@ -23,15 +23,15 @@ int get_rank_from_vertices(const std::array<int, 4>& vertices_id, const std::map
         if(std::count(ranks.cbegin(), ranks.cend(), r) == 4 && r != my_rank) return r;
     }
     throw std::runtime_error("nobody owns the 4 vertices?");
-}
+}*/
 
-std::array<std::set<int>, 12> get_ranks_per_plane(
+std::array<int, 12> get_planes_owner(
         const std::array<VertexIndex, 8>& vids,
         const std::map<int, Communicator>& comms) {
     auto planes_vid = get_planes_vids(vids);
-    std::array<std::set<int>, 12> ranks_per_plane;
+    std::array<int, 12> ranks_per_plane;
     for(int i = 0; i < 12; ++i) {
-        ranks_per_plane[i] = get_ranks_from_vertices<3>(planes_vid[i], comms);
+        ranks_per_plane[i] = get_vertices_owner<3>(planes_vid[i], comms);
     }
     return ranks_per_plane;
 }
