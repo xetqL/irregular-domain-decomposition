@@ -123,7 +123,7 @@ int main(int argc, char** argv) {
     //auto domain = d.get_bounding_box();
     type::DataIndex x_proc_idx, y_proc_idx, z_proc_idx;
     lb::linear_to_grid(my_rank, procs_x, procs_y, x_proc_idx, y_proc_idx, z_proc_idx);
-
+    //std::vector<Cell> my_cells(bbox.get_number_of_cells(), mesh::EMPTY_CELL);
     std::vector<Cell> my_cells = mesh::generate_lattice_single_type<Particle>(
             msx, msy, msz, x_proc_idx, y_proc_idx, z_proc_idx,
             cell_in_my_cols, cell_in_my_rows, cell_in_my_depth,
@@ -232,11 +232,11 @@ int main(int argc, char** argv) {
         auto avg_lb_cost = std::accumulate(C.begin(), C.end(), 0.0) / C.size();
         lb_decision = degradation_since_last_lb >= avg_lb_cost;
 
-        if(lb_decision) {
+        if(true) {
 
             double start_time = MPI_Wtime();
-            opt.optimize_neighborhood(com, part, my_cells, mu);
-            double lb_time  = MPI_Wtime() - start_time;
+            auto ghost = opt.optimize_neighborhood(com, part, my_cells, mu);
+            double lb_time    = MPI_Wtime() - start_time;
 
             {
                 std::vector<double> lbtimes(communicator.comm_size);
@@ -278,6 +278,7 @@ int main(int argc, char** argv) {
                 median<double>(avg_iteration_time_window.end()-std::min(3, (int) max_iteration_time_window.size()), avg_iteration_time_window.end());
 
         virtual_times[j] = virtual_time;
+
         /* increase workload */
         if(!my_rank) {
             cum_vtime[j] = j == 0 ? virtual_time : cum_vtime[j-1] + virtual_time;

@@ -55,15 +55,18 @@ int get_vertices_owner(
 
     for(int vid : vertices_id) {
         auto neighbors = neighborhoods.at(vid).get_ranks();
+        assert(neighbors.size() == 8);
         std::copy(neighbors.begin(), neighbors.end(), std::back_inserter(ranks));
         std::copy(neighbors.begin(), neighbors.end(), std::inserter(unique_ranks, unique_ranks.begin()));
     }
 
     for(int r : unique_ranks) {
-        if(std::count(ranks.cbegin(), ranks.cend(), r) == N && r != my_rank) return r;
+        if(std::count(ranks.cbegin(), ranks.cend(), r) == N && r != my_rank) {
+            return r;
+        }
     }
 
-    throw std::runtime_error("nobody owns the "+std::to_string(N)+" vertices?");
+    return -1; //I am the only one who holds the 3 vertices !
 }
 
 
@@ -309,7 +312,7 @@ public:
         auto all_loads = ::get_neighbors_load(my_load, neighborhood); //global load balancing with MPI_COMM_WORLD
         auto avg_load  = std::accumulate(all_loads.cbegin(), all_loads.cend(), 0.0) / N;
         auto max_load  =*std::max_element(all_loads.cbegin(), all_loads.cend());
-        std::cout << count << std::endl;
+        //std::cout << count << std::endl;
         MPI_Allreduce(&count, &b1, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
         MPI_Allreduce(&count_cell, &b2, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
@@ -598,7 +601,7 @@ public:
     }
 
     template<class LoadComputer, class A>
-    void /*std::vector<std::pair<ProcRank, std::vector<DataIndex>>>*/ move_selected_vertices(int com,
+    std::unordered_map<ProcRank, std::vector<DataIndex>> move_selected_vertices(int com,
             std::vector<mesh::Cell<A>>& elements, Real avg_load, Real mu, Real *delta_load, MPI_Comm neighborhood = MPI_COMM_WORLD) {
         using Cell = mesh::Cell<A>;
         get_MPI_rank(my_rank);
@@ -666,8 +669,7 @@ public:
         size_t data_id = 0;
         size_t nb_migrate = 0;
         lb::Box3 bbox(vertices, *grid_cell_size);
-        /* resize to my bounding box */
-        //elements.resize(bbox.get_number_of_cells(), mesh::EMPTY_CELL);
+
         std::vector<mesh::Cell<A>> new_elements(bbox.get_number_of_cells(), mesh::EMPTY_CELL);
         int i = 0;
         for(Cell& c : new_elements) c.lid = i++;
@@ -676,7 +678,7 @@ public:
         auto nb_elements = elements.size();
 
         auto ranks_per_plane = get_planes_owner(vertices_id, vertex_neighborhood);
-        std::unordered_map<int, std::vector<DataIndex>> ghost_and_destination;
+        std::unordered_map<ProcRank, std::vector<DataIndex>> ghost_and_destination;
         while(data_id < nb_elements) {
             if(elements[data_id].type == mesh::REAL_CELL) {
                 auto point = elements[data_id].get_center_point();
@@ -703,14 +705,14 @@ public:
                         throw std::runtime_error("Real cell must belong to someone");
                     }
                 } else { // contained by polygon but wrong local id
-
                     auto lid = elements[data_id].get_lid(grid_params.get_cell_number_x(),
                                                          grid_params.get_cell_number_y(),
                                                          grid_params.get_cell_number_z(), bbox);
                     auto close_planes = find_planes_closer_than(planes, point, 1.0);
                     for(auto p : close_planes) {
                         auto owner = ranks_per_plane[p];
-                        ghost_and_destination[owner].push_back(lid);
+                        if(owner >= 0)
+                            ghost_and_destination[owner].push_back(lid);
                     }
                     elements[data_id].lid = lid;
                     new_elements.at(lid) = std::move(elements[data_id]);
@@ -780,7 +782,7 @@ public:
             *delta_load = recv_load - sent_load;
             elements = new_elements;
         }
-        //return neighbor_ghosts;
+        return ghost_and_destination;
     }
 
     template<class NumericalType>

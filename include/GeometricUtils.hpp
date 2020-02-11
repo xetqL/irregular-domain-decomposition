@@ -47,14 +47,24 @@ struct Box3 {
             if(p.y() > ymax) ymax = p.y();
             if(p.z() > zmax) zmax = p.z();
         }
+
+        //xmin = std::min(xmin, xmin-step);
+        //ymin = std::min(ymin, ymin-step);
+        //zmin = std::min(zmin, zmin-step);
+        xmax += step;
+        ymax += step;
+        zmax += step;
+
         hook_to_grid();
         init();
     }
+
     Box3(Real xmin, Real xmax, Real ymin, Real ymax, Real zmin, Real zmax, Real step) :
             xmin(xmin), xmax(xmax), ymin(ymin), ymax(ymax), zmin(zmin), zmax(zmax), step(step){
         hook_to_grid();
         init();
     }
+
     DataIndex get_number_of_cells() {
         return (size_x) * (size_y) * (size_z);
     }

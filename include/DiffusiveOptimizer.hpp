@@ -15,7 +15,8 @@ template<class A, class GridElementComputer >
 class DiffusiveOptimizer {
 
 public:
-    void optimize_neighborhood(int com, Partition& part, std::vector<mesh::Cell<A>> & my_cells, Real init_mu) {
+    std::unordered_map<ProcRank, std::vector<DataIndex>>
+    optimize_neighborhood(int com, Partition& part, std::vector<mesh::Cell<A>> & my_cells, Real init_mu) {
         get_MPI_rank(my_rank);
         get_MPI_worldsize(worldsize);
         auto vid = part.vertices_id[com];
@@ -32,11 +33,12 @@ public:
         Real delta_load = 0;
         unsigned int remaining_trials = 2;
         Real mu = init_mu;
-        while(remaining_trials) {
-            part.move_selected_vertices<GridElementComputer, A> (com, my_cells, avg_load, mu, &delta_load);
+        std::unordered_map<ProcRank, std::vector<DataIndex>> ghosts_to_send;
+        while(remaining_trials)
+        {
+            ghosts_to_send = part.move_selected_vertices<GridElementComputer, A> (com, my_cells, avg_load, mu, &delta_load);
             my_load += delta_load;
             auto current_stats = part.get_neighborhood_load_statistics(com, my_load, my_cells.size());
-
             if(prev_imbalance <= current_stats.global) {
                 remaining_trials--;
                 mu /= 2.0;
@@ -45,6 +47,7 @@ public:
                 prev_imbalance = current_stats.global;
             }
         }
+        return ghosts_to_send;
     }
 };
 

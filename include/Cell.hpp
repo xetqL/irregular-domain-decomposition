@@ -233,7 +233,6 @@ void insert_or_remove(std::vector<Cell<T>>* _cells, std::vector<T>* _elements, l
             type::DataIndex lid = (ix - bbox.x_idx_min) + bbox.size_x * (iy - bbox.y_idx_min) + bbox.size_y * bbox.size_x * (iz - bbox.z_idx_min);
             try {
                 cells.at(lid).add(el);
-
             } catch(...) {
                 std::cout << ix << " "<< iy<<" " <<iz << std::endl;
                 std::cout << bbox << std::endl;
