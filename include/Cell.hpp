@@ -270,5 +270,31 @@ std::vector<Cell<T>> generate_lattice_single_type(type::DataIndex msx, type::Dat
     return my_cells;
 }
 
+template<class T>
+std::vector<Cell<T>> populate_lattice_single_type(
+        std::vector<Cell<T>> *cells, lb::Box3& bbox,
+        type::DataIndex msx, type::DataIndex msy, type::DataIndex msz,
+        type::DataIndex x_proc_idx, type::DataIndex y_proc_idx, type::DataIndex z_proc_idx,
+        type::DataIndex cell_in_my_cols, type::DataIndex cell_in_my_rows, type::DataIndex cell_in_my_depth,
+        mesh::TCellType type) {
+
+    using Cell = Cell<T>;
+
+    std::vector<Cell>& my_cells = *cells;
+    auto x_shift = (cell_in_my_rows *  x_proc_idx);
+    auto y_shift = (cell_in_my_cols *  y_proc_idx);
+    auto z_shift = (cell_in_my_depth * z_proc_idx);
+
+    for(int z = 0; z < cell_in_my_depth; ++z) {
+        for(int y = 0; y < cell_in_my_cols; ++y) {
+            for(int x = 0; x < cell_in_my_rows; ++x) {
+                auto gid = (x_shift + x) + (y_shift + y) * msx + (z_shift + z) * msx * msy;
+                my_cells.emplace(my_cells.begin()+mesh::compute_lid(msx,msy,msz, gid, bbox), gid, type);
+            }
+        }
+    }
+    return my_cells;
+}
+
 }
 #endif //ADLBIRREG_CELL_HPP

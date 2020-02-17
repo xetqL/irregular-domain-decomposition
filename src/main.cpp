@@ -120,11 +120,10 @@ int main(int argc, char** argv) {
     part.init_communicators(world_size);
     lb::Box3 bbox(part.vertices, grid_params.get_grid_resolution());
     std::cout << bbox << std::endl;
-    //auto domain = d.get_bounding_box();
     type::DataIndex x_proc_idx, y_proc_idx, z_proc_idx;
     lb::linear_to_grid(my_rank, procs_x, procs_y, x_proc_idx, y_proc_idx, z_proc_idx);
-    //std::vector<Cell> my_cells(bbox.get_number_of_cells(), mesh::EMPTY_CELL);
-    std::vector<Cell> my_cells = mesh::generate_lattice_single_type<Particle>(
+    std::vector<Cell> my_cells(bbox.get_number_of_cells(), mesh::EMPTY_CELL);
+    mesh::populate_lattice_single_type<Particle>(&my_cells, bbox,
             msx, msy, msz, x_proc_idx, y_proc_idx, z_proc_idx,
             cell_in_my_cols, cell_in_my_rows, cell_in_my_depth,
             mesh::TCellType::REAL_CELL);

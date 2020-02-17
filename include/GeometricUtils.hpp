@@ -48,9 +48,9 @@ struct Box3 {
             if(p.z() > zmax) zmax = p.z();
         }
 
-        //xmin = std::min(xmin, xmin-step);
-        //ymin = std::min(ymin, ymin-step);
-        //zmin = std::min(zmin, zmin-step);
+        xmin = std::max(0.0, xmin-step);
+        ymin = std::max(0.0, ymin-step);
+        zmin = std::max(0.0, zmin-step);
         xmax += step;
         ymax += step;
         zmax += step;
