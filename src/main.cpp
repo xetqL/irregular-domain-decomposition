@@ -94,14 +94,10 @@ int main(int argc, char** argv) {
     const auto cell_in_my_rows  = grid_params.get_cell_number_x() / procs_x,
                cell_in_my_cols  = grid_params.get_cell_number_y() / procs_y,
                cell_in_my_depth = grid_params.get_cell_number_z() / procs_z;
-
-    const auto cell_per_process = cell_in_my_rows * cell_in_my_cols * cell_in_my_depth,
-               MAX_ITER = (type::DataIndex) params.MAX_STEP;
-
+    const auto MAX_ITER = (type::DataIndex) params.MAX_STEP;
     const auto msx = grid_params.get_cell_number_x();
     const auto msy = grid_params.get_cell_number_y();
     const auto msz = grid_params.get_cell_number_z();
-
     const auto total_cell_count =  grid_params.get_cell_number_x() *
                                    grid_params.get_cell_number_y() *
                                    grid_params.get_cell_number_z();
@@ -123,6 +119,8 @@ int main(int argc, char** argv) {
     type::DataIndex x_proc_idx, y_proc_idx, z_proc_idx;
     lb::linear_to_grid(my_rank, procs_x, procs_y, x_proc_idx, y_proc_idx, z_proc_idx);
     std::vector<Cell> my_cells(bbox.get_number_of_cells(), mesh::EMPTY_CELL);
+
+    std::cout << "Populate lattice " << std::endl;
     mesh::populate_lattice_single_type<Particle>(&my_cells, bbox,
             msx, msy, msz, x_proc_idx, y_proc_idx, z_proc_idx,
             cell_in_my_cols, cell_in_my_rows, cell_in_my_depth,
@@ -131,16 +129,16 @@ int main(int argc, char** argv) {
     std::vector<Particle> particles;
     if(!rank) {
         auto rejection_condition = std::make_shared<initial_condition::lennard_jones::RejectionCondition<DIMENSION>>(
-                &particles, params.sig_lj, 6.25 * params.sig_lj * params.sig_lj, params.T0, 0, 0, 0,
-                DOMAIN_SIZE_X, DOMAIN_SIZE_Y, DOMAIN_SIZE_Z
+                &particles, params.sig_lj, 0, params.T0, bbox.xmin, bbox.ymin, bbox.zmin,
+                bbox.xmax, bbox.ymax, bbox.zmax
         );
-        auto elements_generators = init_generator(rejection_condition, 1, &params, 1000000000);
+        auto elements_generators = init_generator(rejection_condition, 1, &params, 100000);
         int cfg_idx = 0;
         while (!elements_generators.empty()) {
             std::cout << "Starting generation of particles with configuration ("
                       << cfg_idx<<"/"<<elements_generators.size()<<") ..." <<std::endl;
             auto el_gen = elements_generators.front();
-            el_gen.first->generate_elements(&particles, el_gen.second, rejection_condition);
+            el_gen.first->generate_elements(&particles, 50, rejection_condition);
             elements_generators.pop();
             std::cout << el_gen.second <<"/"<< params.npart << " particles generated." << std::endl;
             cfg_idx++;
@@ -149,13 +147,15 @@ int main(int argc, char** argv) {
 
     mesh::insert_or_remove(&my_cells, &particles, bbox);
 
-    for(int i = 0; i < my_cells.size(); ++i) {
+    /*for(int i = 0; i < my_cells.size(); ++i) {
         auto cell = my_cells[i];
-        cell.update_lid(grid_params.get_cell_number_x(),
+        cell.lid = mesh::compute_lid(
+                        grid_params.get_cell_number_x(),
                         grid_params.get_cell_number_y(),
-                        grid_params.get_cell_number_z(), bbox);
-        assert(cell.lid == i);
-    }
+                        grid_params.get_cell_number_z(),
+                        cell.gid,
+                        bbox);
+    }*/
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -237,6 +237,16 @@ int main(int argc, char** argv) {
             auto ghost = opt.optimize_neighborhood(com, part, my_cells, mu);
             double lb_time    = MPI_Wtime() - start_time;
 
+            /* send ghost */
+            for(const auto& dest_and_data : ghost) {
+                lb::ProcRank               dest = dest_and_data.first;
+                std::vector<lb::DataIndex> data = dest_and_data.second;
+                std::for_each(data.begin(), data.end(), [&my_cells](auto& lid) { lid = my_cells[lid].gid; });
+
+            }
+
+            /* receive ghost*/
+
             {
                 std::vector<double> lbtimes(communicator.comm_size);
                 communicator.Allgather(&lb_time, 1, MPI_DOUBLE, lbtimes.data(), 1, MPI_DOUBLE, 122334);
@@ -264,14 +274,7 @@ int main(int argc, char** argv) {
             lb_call++;
             virtual_time += lb_time;
         }
-        /*auto stats = part.get_load_statistics<lb::GridElementComputer>(my_cells);
-        if(!my_rank) print_load_statitics(stats);*/
-/*
-        for(int i = 0; i < world_size; ++i){
-            if(rank == i) std::cout << rank << " " << part << std::endl;
-            MPI_Barrier(MPI_COMM_WORLD);
-        }
-*/
+
         degradation_since_last_lb +=
                 median<double>(max_iteration_time_window.end()-std::min(3, (int) max_iteration_time_window.size()), max_iteration_time_window.end()) -
                 median<double>(avg_iteration_time_window.end()-std::min(3, (int) max_iteration_time_window.size()), avg_iteration_time_window.end());
@@ -336,8 +339,11 @@ int main(int argc, char** argv) {
         std::cout << "------------------- " << std::endl;
     }
     auto s = part.get_load_statistics<lb::GridElementComputer>(my_cells);
-    if(!rank) lb::print_load_statitics(s);
+
+    if(!rank)
+        lb::print_load_statitics(s);
     MPI_Finalize();
+
     return 0;
 }
 

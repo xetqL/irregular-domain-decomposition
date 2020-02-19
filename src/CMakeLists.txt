@@ -1,7 +1,10 @@
 find_package(MPI)
 
-
 set(CMAKE_CXX_COMPILER ${MPI_CXX_COMPILER})
+
+IF(CMAKE_BUILD_TYPE MATCHES Debug)
+    set(CMAKE_CXX_FLAGS "-pg")
+ENDIF()
 
 find_package(CGAL)
 
@@ -25,8 +28,7 @@ add_executable(adlbirreg
         ../include/ljpotential.hpp
         ../include/physics.hpp
         ../include/spatial_elements.hpp
-        ../include/initial_conditions.hpp
-        )
+        ../include/initial_conditions.hpp)
 
 add_executable(test_communcation comm.cpp Communicator.cpp)
 
@@ -40,7 +42,9 @@ target_compile_definitions(adlbirreg PRIVATE CGAL_DISABLE_ROUNDING_MATH_CHECK=ON
 
 IF(CMAKE_BUILD_TYPE MATCHES Debug)
     message("Debug on")
+    set(CMAKE_CXX_FLAGS "-p")
     add_definitions("-Wall -Wpedantic")
+
     target_compile_definitions(adlbirreg PUBLIC DEBUG=True)
 ELSE()
     message("Optimization activated: -O3")

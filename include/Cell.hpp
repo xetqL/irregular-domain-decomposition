@@ -104,14 +104,15 @@ struct Cell {
     using IndexType  = type::DataIndex;
     using value_type = ContainedElement;
     using Real       = type::Real;
+
 private:
-    IndexType gid;
     std::vector<ContainedElement> elements;
 public:
     IndexType lid;
     TCellType type;
+    IndexType gid;
 
-    IndexType get_gid() const {
+    inline IndexType get_gid() const {
         return gid;
     }
 
@@ -207,15 +208,6 @@ public:
         os <<std::setprecision(15)<< "gid: " << cell.gid << " CENTER("<<cx<<";"<<cy<<";"<<cz <<")" << " COORD("<<x<<";"<<y<<";"<<z <<")" << " type: " << cell.type;
         return os;
     }
-/*
-    lb::Box3 as_box(){
-        Real x, y, z;
-        std::tie(x, y, z) = get_coordinates();
-        return {x, x+grid_params.get_grid_resolution(),
-                y, y+grid_params.get_grid_resolution(),
-                z, z+grid_params.get_grid_resolution(),
-                     grid_params.get_grid_resolution()};
-    }*/
 
 };
 
@@ -231,14 +223,7 @@ void insert_or_remove(std::vector<Cell<T>>* _cells, std::vector<T>* _elements, l
             auto indexes = lb::position_to_index(el.position[0], el.position[1], el.position[2], grid_params.get_grid_resolution());
             type::DataIndex ix  = std::get<0>(indexes), iy = std::get<1>(indexes), iz = std::get<2>(indexes);
             type::DataIndex lid = (ix - bbox.x_idx_min) + bbox.size_x * (iy - bbox.y_idx_min) + bbox.size_y * bbox.size_x * (iz - bbox.z_idx_min);
-            try {
-                cells.at(lid).add(el);
-            } catch(...) {
-                std::cout << ix << " "<< iy<<" " <<iz << std::endl;
-                std::cout << bbox << std::endl;
-                std::cout << el << std::endl;
-                throw;
-            }
+            cells.at(lid).add(el);
             nbp++;
         }
     }
@@ -271,29 +256,30 @@ std::vector<Cell<T>> generate_lattice_single_type(type::DataIndex msx, type::Dat
 }
 
 template<class T>
-std::vector<Cell<T>> populate_lattice_single_type(
+void populate_lattice_single_type(
         std::vector<Cell<T>> *cells, lb::Box3& bbox,
         type::DataIndex msx, type::DataIndex msy, type::DataIndex msz,
         type::DataIndex x_proc_idx, type::DataIndex y_proc_idx, type::DataIndex z_proc_idx,
         type::DataIndex cell_in_my_cols, type::DataIndex cell_in_my_rows, type::DataIndex cell_in_my_depth,
         mesh::TCellType type) {
-
     using Cell = Cell<T>;
-
     std::vector<Cell>& my_cells = *cells;
-    auto x_shift = (cell_in_my_rows *  x_proc_idx);
-    auto y_shift = (cell_in_my_cols *  y_proc_idx);
-    auto z_shift = (cell_in_my_depth * z_proc_idx);
+    const auto x_shift = (cell_in_my_rows *  x_proc_idx);
+    const auto y_shift = (cell_in_my_cols *  y_proc_idx);
+    const auto z_shift = (cell_in_my_depth * z_proc_idx);
 
     for(int z = 0; z < cell_in_my_depth; ++z) {
         for(int y = 0; y < cell_in_my_cols; ++y) {
             for(int x = 0; x < cell_in_my_rows; ++x) {
-                auto gid = (x_shift + x) + (y_shift + y) * msx + (z_shift + z) * msx * msy;
-                my_cells.emplace(my_cells.begin()+mesh::compute_lid(msx,msy,msz, gid, bbox), gid, type);
+                const auto gid = (x_shift + x) + (y_shift + y) * msx + (z_shift + z) * msx * msy;
+                const auto lid = mesh::compute_lid(msx, msy, msz, gid, bbox);
+                my_cells.at(lid).lid  = lid;
+                my_cells.at(lid).gid  = gid;
+                my_cells.at(lid).type = type;
             }
         }
     }
-    return my_cells;
+
 }
 
 }

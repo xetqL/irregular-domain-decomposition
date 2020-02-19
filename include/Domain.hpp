@@ -93,7 +93,7 @@ struct Domain {
     void bootstrap_partitions_cubical(unsigned int nb_partitions, const Point_3& p1,const Point_3& p2,const Point_3& p3,const Point_3& p4,
                                       const Point_3& p5,const Point_3& p6,const Point_3& p7,const Point_3& p8) {
         const type::Real proc_per_row = std::cbrt(nb_partitions);
-        const int    row_size     = (int) proc_per_row;
+        const int    row_size         = (int) proc_per_row;
         //const type::Real p_m1         = ((proc_per_row - 1) / proc_per_row);
 
         Transformation translate_right(  CGAL::TRANSLATION, Vector_3(std::abs(p1.x() - p2.x()) / proc_per_row, 0, 0));
